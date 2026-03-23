@@ -10,12 +10,21 @@ A powerful, browser-based PDF manipulation toolkit that puts privacy first. All 
 - **Merge PDF**: Combine pages from multiple PDF files, reorder them, and rotate as needed.
 - **Compress PDF**: Optimize and reduce PDF file size for easier sharing.
 - **Page Management**: 
-  - **Rotate**: Change page orientation (90° increments).
+  - **Rotate**: Change page orientation (90° increments) with optimized performance.
   - **Reorder**: Drag and drop pages to change their sequence.
   - **Delete**: Remove unwanted pages from your document.
+- **Performance Optimized**: 
+  - **Lazy Loading**: Thumbnails are loaded only when visible using `IntersectionObserver`.
+  - **Efficient Rendering**: Minimized re-renders for smoother page interactions.
 - **Preview**: High-quality page thumbnails and full-page zoom view.
-- **Theme Support**: Dark and light modes for comfortable viewing.
+- **Theme Support**: Premium glassmorphic design with dark and light modes.
 - **Privacy First**: 100% client-side processing. No server, no uploads, 100% private.
+
+## 🔍 SEO & Accessibility
+
+- **Optimized for Search**: Includes `robots.txt`, `sitemap.xml`, and comprehensive meta tags for better visibility.
+- **Structured Data**: JSON-LD schema markup for enhanced search engine results.
+- **Accessible Design**: Semantic HTML and improved ARIA labels for screen reader compatibility.
 
 ## 🛠️ Technology Stack
 
