@@ -1,14 +1,21 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import * as pdfjsLib from 'pdfjs-dist';
 import { 
   FileText, Upload, Download, Scissors, 
   RotateCw, Trash2,
   Shield, PenTool, Layers, Loader, Minimize2,
   X, Check, GripVertical, GitMerge, Plus, FilePlus
 } from 'lucide-react';
-import * as pdfLib from 'pdf-lib';
+import { PDFDocument, degrees } from '@cantoo/pdf-lib';
+import qpdfWasm from 'qpdf-wasm-esm-embedded';
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import ThemeToggle from './components/ThemeToggle';
 import { PopupPage } from './components/PopupPage';
 import './App.scss';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+
+const loadQpdf = () => Promise.resolve(qpdfWasm);
 
 interface PDFFile {
   id: string;
@@ -38,9 +45,8 @@ function App() {
   const [activeTool, setActiveTool] = useState<Tool>('split');
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [pdfDoc, setPdfDoc] = useState<pdfLib.PDFDocument | null>(null);
+  const [pdfDoc, setPdfDoc] = useState<PDFDocument | null>(null);
   const [alert, setAlert] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
-  const [compressionQuality, setCompressionQuality] = useState(80);
   const [splitRange, setSplitRange] = useState({ from: 1, to: 1 });
 
   const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
@@ -55,7 +61,10 @@ function App() {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const touchDragRef = useRef<{ pageNum: number; startX: number; startY: number; timestamp: number } | null>(null);
   const lastTouchDragTime = useRef<number>(0);
-  const thumbnailCache = useRef<Map<number, string>>(new Map());
+  const thumbnailCache = useRef<Map<string, string>>(new Map());
+  const pdfDocCache = useRef<Map<string, { pdfDoc: any; pdfjsDoc: any }>>(new Map());
+  const pdfjsLoadingTaskCache = useRef<Map<string, Promise<any>>>(new Map());
+  const renderOperationId = useRef<number>(0);
   const popupCanvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfJsRef = useRef<any>(null);
@@ -63,7 +72,7 @@ function App() {
 
   const [mergeOrder, setMergeOrder] = useState<MergePage[]>([]);
   const [mergeDraggedIndex, setMergeDraggedIndex] = useState<number | null>(null);
-  const [mergeDragOverIndex, setMergeDragOverIndex] = useState<number | null>(null);
+  const mergeDragOverIndexRef = useRef<number | null>(null);
   const mergeInputRef = useRef<HTMLInputElement>(null);
   const mergeThumbCache = useRef<Map<string, string>>(new Map());
   const mergeRenderingRef = useRef<Set<string>>(new Set());
@@ -76,6 +85,10 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('pdf-theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    pdfJsRef.current = pdfjsLib;
+  }, []);
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
@@ -94,25 +107,20 @@ function App() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
-  const renderAllThumbnails = useCallback(async () => {
-    if (!currentFile || totalPages === 0) return;
-    
-    for (let i = 1; i <= totalPages; i++) {
-      if (!thumbnailCache.current.has(i)) {
-        await renderThumbnail(i);
-      }
-    }
-  }, [currentFile, totalPages, pageRotations]);
-
-  const renderThumbnail = useCallback(async (pageNum: number) => {
+    const renderThumbnail = useCallback(async (pageNum: number, operationId?: number) => {
     if (!currentFile || isRenderingRef.current.has(pageNum)) return;
+    
+    const currentOpId = operationId ?? renderOperationId.current;
+    if (currentOpId !== renderOperationId.current) return;
+    
+    const cacheKey = `${currentFile.id}-${pageNum}`;
     
     isRenderingRef.current.add(pageNum);
     
-    const existingDataUrl = thumbnailCache.current.get(pageNum);
+    const existingDataUrl = thumbnailCache.current.get(cacheKey);
     if (existingDataUrl) {
       const img = document.querySelector(`.thumbnail-img-${pageNum}`) as HTMLImageElement;
-      if (img) {
+      if (img && currentOpId === renderOperationId.current) {
         img.src = existingDataUrl;
       }
       isRenderingRef.current.delete(pageNum);
@@ -120,17 +128,16 @@ function App() {
     }
     
     try {
-      let pdfjsLib = pdfJsRef.current;
-      if (!pdfjsLib) {
-        pdfjsLib = await import('pdfjs-dist');
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs`;
-        pdfJsRef.current = pdfjsLib;
-      }
+      const pdfjsLib = pdfJsRef.current;
+      if (!pdfjsLib || !currentFile) return;
       
-      const arrayBuffer = await currentFile.file.arrayBuffer();
-      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-      const pdf = await loadingTask.promise;
-      const page = await pdf.getPage(pageNum);
+      if (currentOpId !== renderOperationId.current) return;
+      
+      const cached = pdfDocCache.current.get(currentFile.id);
+      const pdfDoc = cached?.pdfjsDoc;
+      if (!pdfDoc) return;
+      
+      const page = await pdfDoc.getPage(pageNum);
       
       const scale = 0.25;
       const viewport = page.getViewport({ scale });
@@ -142,37 +149,17 @@ function App() {
       const context = tempCanvas.getContext('2d');
       if (!context) return;
       
-      const rotation = pageRotations.get(pageNum) || 0;
-      
-      if (rotation) {
-        context.save();
-        if (rotation === 90 || rotation === 270) {
-          tempCanvas.width = viewport.height;
-          tempCanvas.height = viewport.width;
-          context.translate(tempCanvas.width / 2, tempCanvas.height / 2);
-          context.rotate((rotation * Math.PI) / 180);
-          context.translate(-viewport.height / 2, -viewport.width / 2);
-        } else {
-          context.translate(tempCanvas.width / 2, tempCanvas.height / 2);
-          context.rotate((rotation * Math.PI) / 180);
-          context.translate(-viewport.width / 2, -viewport.height / 2);
-        }
-      }
-      
       await page.render({
         canvasContext: context,
         viewport: viewport
       }).promise;
       
-      if (rotation) {
-        context.restore();
-      }
-      
       const dataUrl = tempCanvas.toDataURL('image/png');
-      thumbnailCache.current.set(pageNum, dataUrl);
+      const cacheKey = `${currentFile.id}-${pageNum}`;
+      thumbnailCache.current.set(cacheKey, dataUrl);
       
       const img = document.querySelector(`.thumbnail-img-${pageNum}`) as HTMLImageElement;
-      if (img) {
+      if (img && currentOpId === renderOperationId.current) {
         img.src = dataUrl;
       }
     } catch (err) {
@@ -182,18 +169,23 @@ function App() {
     }
   }, [currentFile, pageRotations]);
 
-  const loadPDF = async (file: File, addToList = true) => {
+  const loadPDF = async (file: File, addToList = true, shouldRenderThumbnails = true, explicitFileId?: string) => {
+    const arrayBuffer = await file.arrayBuffer();
+    
     try {
-      thumbnailCache.current.clear();
-      pdfJsRef.current = null;
+      if (addToList && shouldRenderThumbnails) {
+        thumbnailCache.current.clear();
+      }
       
-      const arrayBuffer = await file.arrayBuffer();
-      const pdfDocument = await pdfLib.PDFDocument.load(arrayBuffer);
+      const pdfDocument = await PDFDocument.load(arrayBuffer);
       const pageCount = pdfDocument.getPageCount();
       
+      let fileId: string;
+      
       if (addToList) {
+        fileId = explicitFileId || Math.random().toString(36).substring(7);
         const newFile: PDFFile = {
-          id: Math.random().toString(36).substring(7),
+          id: fileId,
           name: file.name,
           file,
           pageCount,
@@ -202,7 +194,18 @@ function App() {
         setFiles(prev => [...prev, newFile]);
         setCurrentFile(newFile);
       } else {
+        fileId = explicitFileId || currentFile?.id || Math.random().toString(36).substring(7);
         setCurrentFile(prev => prev ? { ...prev, file, pageCount } : null);
+      }
+      
+      if (shouldRenderThumbnails) {
+        const pdfjsLib = pdfJsRef.current;
+        if (pdfjsLib) {
+          const pdfjsDoc = await pdfjsLib.getDocument({ 
+            data: arrayBuffer
+          }).promise;
+          pdfDocCache.current.set(fileId, { pdfDoc: pdfDocument, pdfjsDoc });
+        }
       }
       
       setPdfDoc(pdfDocument);
@@ -214,28 +217,51 @@ function App() {
       setPageRotations(new Map());
       setHasChanges(false);
       showAlert('success', `Loaded "${file.name}" with ${pageCount} pages`);
-    } catch {
+    } catch (err: any) {
+      if (err?.message?.includes('encrypted') || err?.message?.includes('password')) {
+        showAlert('error', `Skipped "${file.name}" - Password protected PDFs are not supported.`);
+        return;
+      }
+      console.error('PDF load error:', err?.message);
       showAlert('error', 'Failed to load PDF. Please ensure the file is a valid PDF.');
     }
   };
 
-  useEffect(() => {
-    if (!currentFile || totalPages === 0) return;
-    
-    const timeoutId = setTimeout(() => {
-      renderAllThumbnails();
-    }, 100);
-    
-    return () => clearTimeout(timeoutId);
-  }, [currentFile, totalPages, renderAllThumbnails]);
-
-  const handleFiles = useCallback((fileList: FileList | File[]) => {
+    const handleFiles = useCallback(async (fileList: FileList | File[]) => {
     const pdfFiles = Array.from(fileList).filter(f => f.type === 'application/pdf' || f.name.endsWith('.pdf'));
     if (pdfFiles.length === 0) {
       showAlert('error', 'Please select valid PDF files');
       return;
     }
-    pdfFiles.forEach(file => loadPDF(file));
+    
+    const results = await Promise.all(pdfFiles.map(async (file) => {
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+        return { file, valid: true };
+      } catch (err: any) {
+        if (err?.message?.includes('encrypted') || err?.message?.includes('password')) {
+          return { file, valid: false, skipped: true };
+        }
+        return { file, valid: false, error: true };
+      }
+    }));
+    
+    const validFiles = results.filter(r => r.valid).map(r => r.file);
+    const skippedFiles = results.filter(r => r.skipped).map(r => r.file.name);
+    const invalidFiles = results.filter(r => r.error).map(r => r.file.name);
+    
+    if (skippedFiles.length > 0) {
+      showAlert('error', `Skipped ${skippedFiles.length} password protected PDF(s): ${skippedFiles.join(', ')}`);
+    }
+    
+    if (invalidFiles.length > 0) {
+      showAlert('error', `Invalid PDF(s): ${invalidFiles.join(', ')}`);
+    }
+    
+    if (validFiles.length > 0) {
+      validFiles.forEach((file, index) => loadPDF(file, true, index === 0));
+    }
   }, []);
 
   const handleFileDragOver = (e: React.DragEvent) => {
@@ -269,7 +295,7 @@ function App() {
         const remaining = newFiles[0] || null;
         setCurrentFile(remaining);
         if (remaining) {
-          loadPDF(remaining.file, false);
+          loadPDF(remaining.file, false, true);
         } else {
           setPdfDoc(null);
           setTotalPages(0);
@@ -282,7 +308,7 @@ function App() {
 
   const switchFile = async (file: PDFFile) => {
     setCurrentFile(file);
-    await loadPDF(file.file, false);
+    await loadPDF(file.file, false, true, file.id);
   };
 
   const toggleSelection = (pageNum: number) => {
@@ -424,7 +450,7 @@ function App() {
   };
 
   const rotatePage = (pageNum: number, angle: number) => {
-    thumbnailCache.current.delete(pageNum);
+    if (!currentFile) return;
     setPageRotations(prev => {
       const newMap = new Map(prev);
       const current = newMap.get(pageNum) || 0;
@@ -453,7 +479,7 @@ function App() {
           : `edited_${currentFile.name}`;
         downloadBlob(pdfBytes, filename);
       } else {
-        const newPdf = await pdfLib.PDFDocument.create();
+        const newPdf = await PDFDocument.create();
         
         for (const pageNum of orderedPages) {
           const pageIndex = pageNum - 1;
@@ -462,7 +488,7 @@ function App() {
           const rotation = pageRotations.get(pageNum);
           if (rotation && rotation !== 0) {
             const currentRotation = copiedPage.getRotation().angle;
-            copiedPage.setRotation(pdfLib.degrees(currentRotation + rotation));
+            copiedPage.setRotation(degrees(currentRotation + rotation));
           }
           
           newPdf.addPage(copiedPage);
@@ -677,8 +703,8 @@ function App() {
     const arrayBuffer = await file.arrayBuffer();
     const pdfBytes = new Uint8Array(arrayBuffer);
     
-    const sourcePdf = await pdfLib.PDFDocument.load(pdfBytes);
-    const newPdf = await pdfLib.PDFDocument.create();
+    const sourcePdf = await PDFDocument.load(pdfBytes);
+    const newPdf = await PDFDocument.create();
     
     for (const pageNum of pages) {
       const pageIndex = pageNum - 1;
@@ -708,7 +734,7 @@ function App() {
         return;
       }
       
-      const newPdf = await pdfLib.PDFDocument.create();
+      const newPdf = await PDFDocument.create();
       
       for (const pageNum of pagesToExtract) {
         const pageIndex = pageNum - 1;
@@ -717,7 +743,7 @@ function App() {
         const rotation = pageRotations.get(pageNum);
         if (rotation && rotation !== 0) {
           const currentRotation = copiedPage.getRotation().angle;
-          copiedPage.setRotation(pdfLib.degrees(currentRotation + rotation));
+          copiedPage.setRotation(degrees(currentRotation + rotation));
         }
         
         newPdf.addPage(copiedPage);
@@ -733,37 +759,70 @@ function App() {
   };
 
   const compressPDF = async () => {
-    if (!currentFile || !pdfDoc) return;
+    if (!currentFile) return;
     
     setIsProcessing(true);
     try {
-      const newPdf = await pdfLib.PDFDocument.create();
+      const arrayBuffer = await currentFile.file.arrayBuffer();
+      const inputBytes = new Uint8Array(arrayBuffer);
       
-      for (const pageNum of pageOrder) {
-        if (deletedPages.has(pageNum)) continue;
+      const visiblePages = pageOrder.filter(p => !deletedPages.has(p));
+      const pagesToCompress = selectedPages.size > 0 
+        ? visiblePages.filter(p => selectedPages.has(p))
+        : visiblePages;
+      
+      let pdfToCompress: Uint8Array;
+      
+      if (selectedPages.size > 0 && pagesToCompress.length > 0) {
+        const sourcePdf = await PDFDocument.load(inputBytes);
+        const newPdf = await PDFDocument.create();
         
-        const pageIndex = pageNum - 1;
-        const [copiedPage] = await newPdf.copyPages(pdfDoc, [pageIndex]);
-        
-        const rotation = pageRotations.get(pageNum);
-        if (rotation && rotation !== 0) {
-          const currentRotation = copiedPage.getRotation().angle;
-          copiedPage.setRotation(pdfLib.degrees(currentRotation + rotation));
+        for (const pageNum of pagesToCompress) {
+          const pageIndex = pageNum - 1;
+          if (pageIndex >= 0 && pageIndex < sourcePdf.getPageCount()) {
+            const [copiedPage] = await newPdf.copyPages(sourcePdf, [pageIndex]);
+            
+            const rotation = pageRotations.get(pageNum);
+            if (rotation && rotation !== 0) {
+              const currentRotation = copiedPage.getRotation().angle;
+              copiedPage.setRotation(degrees(currentRotation + rotation));
+            }
+            
+            newPdf.addPage(copiedPage);
+          }
         }
         
-        newPdf.addPage(copiedPage);
+        pdfToCompress = await newPdf.save();
+      } else {
+        pdfToCompress = inputBytes;
       }
       
-      const pdfBytes = await newPdf.save();
+      const qpdfModule = await loadQpdf();
+      const qpdf = qpdfModule({
+        noInitialRun: true,
+      }) as any;
+      
+      qpdf.FS.writeFile('input.pdf', pdfToCompress);
+      
+      await qpdf.callMain([
+        '--object-streams=generate',
+        'input.pdf',
+        'output.pdf'
+      ]);
+      
+      const outputBytes = qpdf.FS.readFile('output.pdf');
+      const pdfBytes = new Uint8Array(outputBytes);
       
       const originalSize = currentFile.file.size;
       const newSize = pdfBytes.length;
       const reduction = Math.round((1 - newSize / originalSize) * 100);
       
+      const pageInfo = selectedPages.size > 0 ? ` (${pagesToCompress.length} pages)` : '';
       saveBlob(pdfBytes, `${currentFile.name.replace('.pdf', '')}_compressed.pdf`);
-      showAlert('success', `Compressed: ${formatFileSize(originalSize)} → ${formatFileSize(newSize)} (${reduction > 0 ? '-' : '+'}${Math.abs(reduction)}%)`);
-    } catch {
-      showAlert('error', 'Failed to compress PDF');
+      showAlert('success', `Compressed${pageInfo}: ${formatFileSize(originalSize)} → ${formatFileSize(newSize)} (${reduction > 0 ? '-' : '+'}${Math.abs(reduction)}%)`);
+    } catch (err) {
+      console.error('Compression error:', err);
+      showAlert('error', 'Compression failed. Please try a different PDF.');
     }
     setIsProcessing(false);
   };
@@ -789,16 +848,32 @@ function App() {
     }
     
     try {
-      let pdfjsLib = pdfJsRef.current;
-      if (!pdfjsLib) {
-        pdfjsLib = await import('pdfjs-dist');
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs`;
-        pdfJsRef.current = pdfjsLib;
-      }
+      const pdfjsLib = pdfJsRef.current;
+      if (!pdfjsLib) return;
       
-      const arrayBuffer = await file.file.arrayBuffer();
-      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-      const pdf = await loadingTask.promise;
+      let pdf: any;
+      const cached = pdfDocCache.current.get(fileId);
+      if (cached?.pdfjsDoc) {
+        pdf = cached.pdfjsDoc;
+      } else {
+        if (!pdfjsLoadingTaskCache.current) {
+          pdfjsLoadingTaskCache.current = new Map();
+        }
+        
+        let loadingPromise = pdfjsLoadingTaskCache.current.get(fileId);
+        if (!loadingPromise) {
+          loadingPromise = file.file.arrayBuffer().then((arrayBuffer) => 
+            pdfjsLib.getDocument({ data: arrayBuffer }).promise
+          ).then((loadedPdf) => {
+             const currentCache = pdfDocCache.current.get(fileId) || { pdfDoc: null, pdfjsDoc: null };
+             pdfDocCache.current.set(fileId, { ...currentCache, pdfjsDoc: loadedPdf });
+             return loadedPdf;
+          });
+          pdfjsLoadingTaskCache.current.set(fileId, loadingPromise);
+        }
+        
+        pdf = await loadingPromise;
+      }
       const page = await pdf.getPage(pageIndex);
       
       const scale = 0.2;
@@ -902,7 +977,6 @@ function App() {
 
   const rotateMergePage = (fileId: string, pageIndex: number, angle: number) => {
     const key = `${fileId}-${pageIndex}`;
-    mergeThumbCache.current.delete(key);
     setMergeRotations(prev => {
       const newMap = new Map(prev);
       const current = newMap.get(key) || 0;
@@ -927,21 +1001,46 @@ function App() {
     e.dataTransfer.effectAllowed = 'move';
   };
 
+  const updateMergeDragOverUI = (newIndex: number | null) => {
+    if (mergeDragOverIndexRef.current === newIndex) return;
+    
+    if (mergeDragOverIndexRef.current !== null) {
+      const oldEl = document.getElementById(`merge-item-${mergeDragOverIndexRef.current}`);
+      if (oldEl) oldEl.classList.remove('drag-over');
+    }
+    
+    if (newIndex !== null) {
+      const newEl = document.getElementById(`merge-item-${newIndex}`);
+      if (newEl) newEl.classList.add('drag-over');
+    }
+    
+    mergeDragOverIndexRef.current = newIndex;
+  };
+
   const handleMergeDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    setMergeDragOverIndex(index);
+    updateMergeDragOverUI(index);
   };
 
-  const handleMergeDragLeave = () => {
-    setMergeDragOverIndex(null);
+  const handleMergeDragLeave = (e: React.DragEvent) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    if (
+      e.clientY < rect.top ||
+      e.clientY >= rect.bottom ||
+      e.clientX < rect.left ||
+      e.clientX >= rect.right
+    ) {
+      updateMergeDragOverUI(null);
+    }
   };
 
   const handleMergeDrop = (e: React.DragEvent, targetIndex: number) => {
     e.preventDefault();
+    updateMergeDragOverUI(null);
+    
     if (mergeDraggedIndex === null || mergeDraggedIndex === targetIndex) {
       setMergeDraggedIndex(null);
-      setMergeDragOverIndex(null);
       return;
     }
 
@@ -953,12 +1052,11 @@ function App() {
     });
 
     setMergeDraggedIndex(null);
-    setMergeDragOverIndex(null);
   };
 
   const handleMergeDragEnd = () => {
     setMergeDraggedIndex(null);
-    setMergeDragOverIndex(null);
+    updateMergeDragOverUI(null);
   };
 
   const mergePDFs = async () => {
@@ -969,9 +1067,9 @@ function App() {
     
     setIsProcessing(true);
     try {
-      const mergedPdf = await pdfLib.PDFDocument.create();
+      const mergedPdf = await PDFDocument.create();
       
-      const loadedDocs = new Map<string, pdfLib.PDFDocument>();
+      const loadedDocs = new Map<string, PDFDocument>();
       
       for (const mergePage of mergeOrder) {
         let sourceDoc = loadedDocs.get(mergePage.fileId);
@@ -980,7 +1078,7 @@ function App() {
           const file = files.find(f => f.id === mergePage.fileId);
           if (!file) continue;
           const arrayBuffer = await file.file.arrayBuffer();
-          sourceDoc = await pdfLib.PDFDocument.load(arrayBuffer);
+          sourceDoc = await PDFDocument.load(arrayBuffer);
           loadedDocs.set(mergePage.fileId, sourceDoc);
         }
         
@@ -992,7 +1090,7 @@ function App() {
           const rotation = mergeRotations.get(key);
           if (rotation && rotation !== 0) {
             const currentRotation = copiedPage.getRotation().angle;
-            copiedPage.setRotation(pdfLib.degrees(currentRotation + rotation));
+            copiedPage.setRotation(degrees(currentRotation + rotation));
           }
           
           mergedPdf.addPage(copiedPage);
@@ -1011,13 +1109,18 @@ function App() {
   const renderPopupPage = useCallback(async () => {
     if (!currentFile || !popupPage || !popupCanvasRef.current) return;
     
+    const pdfjsLib = pdfJsRef.current;
+    if (!pdfjsLib) return;
+    
     try {
-      const pdfjsLib = await import('pdfjs-dist');
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs`;
-      
-      const arrayBuffer = await currentFile.file.arrayBuffer();
-      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-      const pdf = await loadingTask.promise;
+      let pdf: any;
+      const cached = pdfDocCache.current.get(currentFile.id);
+      if (cached?.pdfjsDoc) {
+        pdf = cached.pdfjsDoc;
+      } else {
+        const arrayBuffer = await currentFile.file.arrayBuffer();
+        pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      }
       const page = await pdf.getPage(popupPage);
       
       const scale = (popupZoom / 100) * 1.5;
@@ -1076,13 +1179,18 @@ function App() {
     const rotation = mergeRotations.get(`${mergePopupPage.fileId}-${mergePopupPage.pageIndex}`) || 0;
     
     const render = async () => {
+      const pdfjsLib = pdfJsRef.current;
+      if (!pdfjsLib) return;
+      
       try {
-        const pdfjsLib = await import('pdfjs-dist');
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs`;
-        
-        const arrayBuffer = await file.file.arrayBuffer();
-        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-        const pdf = await loadingTask.promise;
+        let pdf: any;
+        const cached = pdfDocCache.current.get(file.id);
+        if (cached?.pdfjsDoc) {
+          pdf = cached.pdfjsDoc;
+        } else {
+          const arrayBuffer = await file.file.arrayBuffer();
+          pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        }
         const page = await pdf.getPage(mergePopupPage.pageIndex);
         
         const scale = (popupZoom / 100) * 1.5;
@@ -1127,7 +1235,87 @@ function App() {
 
   const closePopup = () => {
     setPopupPage(null);
-  };
+  };  const renderThumbnailRef = useRef(renderThumbnail);
+  const renderMergeThumbnailRef = useRef(renderMergeThumbnail);
+
+  useEffect(() => {
+    renderThumbnailRef.current = renderThumbnail;
+  }, [renderThumbnail]);
+
+  useEffect(() => {
+    renderMergeThumbnailRef.current = renderMergeThumbnail;
+  }, [renderMergeThumbnail]);
+
+  const thumbnailObserverRef = useRef<IntersectionObserver | null>(null);
+  const thumbnailRefCallback = useCallback((node: HTMLImageElement | null, fileId: string | undefined, pageNum: number) => {
+    if (!node || !fileId) return;
+
+    const cacheKey = `${fileId}-${pageNum}`;
+    if (thumbnailCache.current.has(cacheKey)) {
+      if (node.src.startsWith('data:image/gif')) {
+        node.src = thumbnailCache.current.get(cacheKey)!;
+      }
+      return;
+    }
+
+    if (!thumbnailObserverRef.current) {
+      thumbnailObserverRef.current = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const target = entry.target as HTMLImageElement;
+            const pNum = parseInt(target.dataset.page || '0');
+            if (pNum) renderThumbnailRef.current(pNum);
+            thumbnailObserverRef.current?.unobserve(target);
+          }
+        });
+      }, { rootMargin: '250px' });
+    }
+
+    node.dataset.page = pageNum.toString();
+    thumbnailObserverRef.current.observe(node);
+  }, []);
+
+  const mergeObserverRef = useRef<IntersectionObserver | null>(null);
+  const mergeThumbnailRefCallback = useCallback((node: HTMLImageElement | null, fileId: string, pageNum: number) => {
+    if (!node) return;
+
+    const cacheKey = `${fileId}-${pageNum}`;
+    if (mergeThumbCache.current.has(cacheKey)) {
+       if (node.src.startsWith('data:image/gif')) {
+         node.src = mergeThumbCache.current.get(cacheKey)!;
+       }
+       return;
+    }
+
+    if (!mergeObserverRef.current) {
+      mergeObserverRef.current = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const target = entry.target as HTMLImageElement;
+            const fId = target.dataset.fileId;
+            const pNum = parseInt(target.dataset.page || '0');
+            if (fId && pNum) {
+              renderMergeThumbnailRef.current(fId, pNum);
+              mergeObserverRef.current?.unobserve(target);
+            }
+          }
+        });
+      }, { rootMargin: '250px' });
+    }
+
+    node.dataset.fileId = fileId;
+    node.dataset.page = pageNum.toString();
+    mergeObserverRef.current.observe(node);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      thumbnailObserverRef.current?.disconnect();
+      mergeObserverRef.current?.disconnect();
+    };
+  }, []);
+
+
 
   const openPopup = (pageNum: number) => {
     setPopupPage(pageNum);
@@ -1162,38 +1350,43 @@ function App() {
 
       <main className="main-layout">
         <aside className="sidebar">
-        {!currentFile && (
-          <div 
-            className={`panel upload-zone ${isDragging ? 'drag-active' : ''}`}
-            onDragOver={handleFileDragOver}
-            onDragLeave={handleFileDragLeave}
-            onDrop={handleFileDrop}
-            onClick={() => fileInputRef.current?.click()}
-            onMouseMove={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const x = ((e.clientX - rect.left) / rect.width) * 100;
-              const y = ((e.clientY - rect.top) / rect.height) * 100;
-              e.currentTarget.style.setProperty('--mouse-x', `${x}%`);
-              e.currentTarget.style.setProperty('--mouse-y', `${y}%`);
-            }}
-          >
-            <Upload className="icon" size={48} />
-            <h2>Drop PDF here</h2>
-            <p>or click to browse your files</p>
-            <p className="hint">Your files never leave your device</p>
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleFileSelect} 
-              accept=".pdf" 
-              style={{ display: 'none' }}
-              multiple
-            />
-          </div>
+          {!currentFile && (
+            <div 
+              className={`panel upload-zone ${isDragging ? 'drag-active' : ''}`}
+              onDragOver={handleFileDragOver}
+              onDragLeave={handleFileDragLeave}
+              onDrop={handleFileDrop}
+              onClick={() => fileInputRef.current?.click()}
+              onMouseMove={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = ((e.clientX - rect.left) / rect.width) * 100;
+                const y = ((e.clientY - rect.top) / rect.height) * 100;
+                e.currentTarget.style.setProperty('--mouse-x', `${x}%`);
+                e.currentTarget.style.setProperty('--mouse-y', `${y}%`);
+              }}
+            >
+              <Upload className="icon" size={48} />
+              <h2>Drop PDF here</h2>
+              <p>or click to browse your files</p>
+              <p className="hint">Your files never leave your device</p>
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileSelect} 
+                accept=".pdf" 
+                style={{ display: 'none' }}
+                multiple
+              />
+            </div>
           )}
 
           {files.length > 0 && (
-            <div className="panel">
+            <div 
+              className={`panel ${isDragging ? 'drag-active' : ''}`}
+              onDragOver={handleFileDragOver}
+              onDragLeave={handleFileDragLeave}
+              onDrop={handleFileDrop}
+            >
               <h3>
                 <Layers size={16} className="panel-icon" />
                 Files ({files.length})
@@ -1225,6 +1418,21 @@ function App() {
                   </div>
                 ))}
               </div>
+              <button 
+                className="add-files-btn"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Plus size={16} />
+                Add More Files
+              </button>
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileSelect} 
+                accept=".pdf" 
+                style={{ display: 'none' }}
+                multiple
+              />
             </div>
           )}
 
@@ -1301,16 +1509,9 @@ function App() {
                 <Minimize2 size={16} className="panel-icon" />
                 Compress PDF
               </h3>
-              <div className="setting-row">
-                <label>Quality: {compressionQuality}%</label>
-                <input 
-                  type="range" 
-                  min="10" 
-                  max="100" 
-                  value={compressionQuality}
-                  onChange={e => setCompressionQuality(parseInt(e.target.value))}
-                />
-              </div>
+              <p className="compress-info">
+                Optimizes PDF file size while preserving text quality.
+              </p>
               <button className="primary-btn" onClick={compressPDF} disabled={isProcessing}>
                 {isProcessing ? <Loader size={16} /> : <Minimize2 size={16} />}
                 Compress & Download
@@ -1377,7 +1578,8 @@ function App() {
                       return (
                         <div
                           key={itemKey}
-                          className={`merge-queue-item ${mergeDraggedIndex === index ? 'dragging' : ''} ${mergeDragOverIndex === index ? 'drag-over' : ''}`}
+                          id={`merge-item-${index}`}
+                          className={`merge-queue-item ${mergeDraggedIndex === index ? 'dragging' : ''}`}
                           draggable={true}
                           onDragStart={(e) => handleMergeDragStart(e, index)}
                           onDragOver={(e) => handleMergeDragOver(e, index)}
@@ -1390,7 +1592,7 @@ function App() {
                           <img
                             src={mergeThumbCache.current.get(cacheKey) || "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"}
                             className={`merge-thumb-canvas merge-thumb-${cacheKey.replace(/[^a-zA-Z0-9]/g, '-')}`}
-                            alt={`Page ${mergePage.pageIndex}`}
+                            alt={`Preview of page ${mergePage.pageIndex} from ${file?.name || 'document'}`}
                             onClick={(e) => { e.stopPropagation(); openMergePopup(mergePage.fileId, mergePage.pageIndex); }}
                             style={rotation ? { transform: `rotate(${rotation}deg)` } : undefined}
                             ref={(el) => {
@@ -1508,8 +1710,8 @@ function App() {
                               <img
                                 src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
                                 className={`source-thumb-canvas merge-thumb-${file.id.replace(/[^a-zA-Z0-9]/g, '-')}-${pageNum}`}
-                                ref={(el) => { if (el) renderMergeThumbnail(file.id, pageNum); }}
-                                alt={`Page ${pageNum}`}
+                                ref={(el) => mergeThumbnailRefCallback(el, file.id, pageNum)}
+                                alt={`Thumbnail of page ${pageNum} from ${file.name}`}
                                 onClick={(e) => { e.stopPropagation(); openMergePopup(file.id, pageNum); }}
                               />
                               <span className="source-page-num">{pageNum}</span>
@@ -1602,15 +1804,10 @@ function App() {
                         
                         <img 
                           src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
-                          ref={(el) => { 
-                            if (el && thumbnailCache.current.has(pageNum)) {
-                              el.src = thumbnailCache.current.get(pageNum)!;
-                            } else if (el) {
-                              renderThumbnail(pageNum);
-                            }
-                          }} 
+                          ref={(el) => thumbnailRefCallback(el, currentFile?.id, pageNum)} 
                           className={`thumbnail-canvas thumbnail-img-${pageNum}`}
-                          alt={`Page ${pageNum}`}
+                          alt={`Thumbnail of page ${pageNum} from ${currentFile?.name || 'document'}`}
+                          style={ (pageRotations.get(pageNum) ?? 0) ? { transform: `rotate(${pageRotations.get(pageNum) ?? 0}deg)`, transformOrigin: 'center center' } : undefined}
                         />
                         
                         <div className="thumbnail-footer">

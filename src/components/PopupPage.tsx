@@ -38,6 +38,7 @@ export const PopupPage: React.FC<PopupPageProps> = ({
               className="popup-btn popup-nav prev"
               onClick={onPrev}
               disabled={currentPage === 1}
+              aria-label="Previous page"
             >
               <ChevronLeft size={20} />
             </button>
@@ -46,11 +47,12 @@ export const PopupPage: React.FC<PopupPageProps> = ({
               className="popup-btn popup-nav next"
               onClick={onNext}
               disabled={currentPage === totalPages}
+              aria-label="Next page"
             >
               <ChevronRight size={20} />
             </button>
           </div>
-          <button className="popup-close" onClick={onClose}>
+          <button className="popup-close" onClick={onClose} aria-label="Close preview">
             <X size={20} />
           </button>
         </div>
@@ -60,14 +62,14 @@ export const PopupPage: React.FC<PopupPageProps> = ({
         </div>
         
         <div className="popup-footer">
-          <button className="popup-btn popup-zoom-btn" onClick={onZoomOut}>
+          <button className="popup-btn popup-zoom-btn" onClick={onZoomOut} aria-label="Zoom out">
             <ZoomOut size={16} />
           </button>
           <span className="zoom-value">{zoomValue}%</span>
-          <button className="popup-btn popup-zoom-btn" onClick={onZoomIn}>
+          <button className="popup-btn popup-zoom-btn" onClick={onZoomIn} aria-label="Zoom in">
             <ZoomIn size={16} />
           </button>
-          <button className="popup-btn popup-zoom-btn fit-btn" onClick={onFit}>
+          <button className="popup-btn popup-zoom-btn fit-btn" onClick={onFit} aria-label="Fit to screen">
             Fit
           </button>
         </div>
