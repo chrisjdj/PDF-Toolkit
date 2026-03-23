@@ -1,12 +1,13 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { 
   FileText, Upload, Download, Scissors, 
-  RotateCw, Trash2, ZoomIn, ZoomOut, ChevronLeft, ChevronRight,
+  RotateCw, Trash2,
   Shield, PenTool, Layers, Loader, Minimize2,
-  X, Check, GripVertical
+  X, Check, GripVertical, GitMerge, Plus, FilePlus
 } from 'lucide-react';
 import * as pdfLib from 'pdf-lib';
 import ThemeToggle from './components/ThemeToggle';
+import { PopupPage } from './components/PopupPage';
 import './App.scss';
 
 interface PDFFile {
@@ -17,7 +18,12 @@ interface PDFFile {
   size: number;
 }
 
-type Tool = 'split' | 'rotate' | 'compress' | 'extract';
+type Tool = 'split' | 'rotate' | 'compress' | 'extract' | 'merge';
+
+interface MergePage {
+  fileId: string;
+  pageIndex: number;
+}
 
 function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -38,6 +44,7 @@ function App() {
   const [splitRange, setSplitRange] = useState({ from: 1, to: 1 });
 
   const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
+  const [mergeSelections, setMergeSelections] = useState<Set<string>>(new Set());
   const [pageOrder, setPageOrder] = useState<number[]>([]);
   const [deletedPages, setDeletedPages] = useState<Set<number>>(new Set());
   const [pageRotations, setPageRotations] = useState<Map<number, number>>(new Map());
@@ -53,6 +60,17 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfJsRef = useRef<any>(null);
   const isRenderingRef = useRef<Set<number>>(new Set());
+
+  const [mergeOrder, setMergeOrder] = useState<MergePage[]>([]);
+  const [mergeDraggedIndex, setMergeDraggedIndex] = useState<number | null>(null);
+  const [mergeDragOverIndex, setMergeDragOverIndex] = useState<number | null>(null);
+  const mergeInputRef = useRef<HTMLInputElement>(null);
+  const mergeThumbCache = useRef<Map<string, string>>(new Map());
+  const mergeRenderingRef = useRef<Set<string>>(new Set());
+  const [mergeRotations, setMergeRotations] = useState<Map<string, number>>(new Map());
+  const [mergePopupPage, setMergePopupPage] = useState<{ fileId: string; pageIndex: number } | null>(null);
+  const filesRef = useRef<PDFFile[]>(files);
+  useEffect(() => { filesRef.current = files; }, [files]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -263,6 +281,7 @@ function App() {
   };
 
   const switchFile = async (file: PDFFile) => {
+    setCurrentFile(file);
     await loadPDF(file.file, false);
   };
 
@@ -749,6 +768,246 @@ function App() {
     setIsProcessing(false);
   };
 
+  const renderMergeThumbnail = useCallback(async (fileId: string, pageIndex: number) => {
+    const cacheKey = `${fileId}-${pageIndex}`;
+    
+    if (mergeThumbCache.current.has(cacheKey)) {
+      const img = document.querySelector(`.merge-thumb-${cacheKey.replace(/[^a-zA-Z0-9]/g, '-')}`) as HTMLImageElement;
+      if (img && img.src.startsWith('data:image/gif')) {
+        img.src = mergeThumbCache.current.get(cacheKey)!;
+      }
+      return;
+    }
+    
+    if (mergeRenderingRef.current.has(cacheKey)) return;
+    mergeRenderingRef.current.add(cacheKey);
+    
+    const file = filesRef.current.find(f => f.id === fileId);
+    if (!file) {
+      mergeRenderingRef.current.delete(cacheKey);
+      return;
+    }
+    
+    try {
+      let pdfjsLib = pdfJsRef.current;
+      if (!pdfjsLib) {
+        pdfjsLib = await import('pdfjs-dist');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs`;
+        pdfJsRef.current = pdfjsLib;
+      }
+      
+      const arrayBuffer = await file.file.arrayBuffer();
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const pdf = await loadingTask.promise;
+      const page = await pdf.getPage(pageIndex);
+      
+      const scale = 0.2;
+      const viewport = page.getViewport({ scale });
+      
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = viewport.width;
+      tempCanvas.height = viewport.height;
+      
+      const context = tempCanvas.getContext('2d');
+      if (!context) {
+        mergeRenderingRef.current.delete(cacheKey);
+        return;
+      }
+      
+      await page.render({
+        canvasContext: context,
+        viewport: viewport
+      }).promise;
+      
+      const dataUrl = tempCanvas.toDataURL('image/png');
+      mergeThumbCache.current.set(cacheKey, dataUrl);
+      
+      const img = document.querySelector(`.merge-thumb-${cacheKey.replace(/[^a-zA-Z0-9]/g, '-')}`) as HTMLImageElement;
+      if (img) img.src = dataUrl;
+    } catch (err) {
+      console.error('Error rendering merge thumbnail:', cacheKey, err);
+    } finally {
+      mergeRenderingRef.current.delete(cacheKey);
+    }
+  }, []);
+
+  const toggleMergeSelection = (fileId: string, pageIndex: number) => {
+    const key = `${fileId}-${pageIndex}`;
+    const isCurrentlySelected = mergeSelections.has(key);
+    
+    if (isCurrentlySelected) {
+      setMergeSelections(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(key);
+        return newSet;
+      });
+      setMergeOrder(prev => prev.filter(p => !(p.fileId === fileId && p.pageIndex === pageIndex)));
+    } else {
+      setMergeSelections(prev => {
+        const newSet = new Set(prev);
+        newSet.add(key);
+        return newSet;
+      });
+      setMergeOrder(prev => [...prev, { fileId, pageIndex }]);
+    }
+  };
+
+  const selectAllInFile = (fileId: string) => {
+    const file = files.find(f => f.id === fileId);
+    if (!file) return;
+    
+    const newSelectionKeys: string[] = [];
+    const pagesToAdd: MergePage[] = [];
+    
+    for (let i = 1; i <= file.pageCount; i++) {
+      const key = `${fileId}-${i}`;
+      if (!mergeSelections.has(key)) {
+        newSelectionKeys.push(key);
+        pagesToAdd.push({ fileId, pageIndex: i });
+      }
+    }
+    
+    if (pagesToAdd.length > 0) {
+      setMergeSelections(prev => new Set([...prev, ...newSelectionKeys]));
+      setMergeOrder(prev => [...prev, ...pagesToAdd]);
+    }
+  };
+
+  const clearSelectionInFile = (fileId: string) => {
+    const file = files.find(f => f.id === fileId);
+    if (!file) return;
+    
+    setMergeSelections(prev => {
+      const newSet = new Set(prev);
+      for (let i = 1; i <= file.pageCount; i++) {
+        newSet.delete(`${fileId}-${i}`);
+      }
+      return newSet;
+    });
+    setMergeOrder(prev => prev.filter(p => p.fileId !== fileId));
+  };
+
+  const removeFromMerge = (index: number) => {
+    const item = mergeOrder[index];
+    if (item) {
+      const key = `${item.fileId}-${item.pageIndex}`;
+      setMergeSelections(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(key);
+        return newSet;
+      });
+    }
+    setMergeOrder(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const rotateMergePage = (fileId: string, pageIndex: number, angle: number) => {
+    const key = `${fileId}-${pageIndex}`;
+    mergeThumbCache.current.delete(key);
+    setMergeRotations(prev => {
+      const newMap = new Map(prev);
+      const current = newMap.get(key) || 0;
+      newMap.set(key, (current + angle) % 360);
+      return newMap;
+    });
+  };
+
+  const openMergePopup = (fileId: string, pageIndex: number) => {
+    setMergePopupPage({ fileId, pageIndex });
+  };
+
+  const clearMergeQueue = () => {
+    setMergeOrder([]);
+    setMergeRotations(new Map());
+    setMergeSelections(new Set());
+    showAlert('info', 'Merge queue cleared');
+  };
+
+  const handleMergeDragStart = (e: React.DragEvent, index: number) => {
+    setMergeDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleMergeDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setMergeDragOverIndex(index);
+  };
+
+  const handleMergeDragLeave = () => {
+    setMergeDragOverIndex(null);
+  };
+
+  const handleMergeDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    if (mergeDraggedIndex === null || mergeDraggedIndex === targetIndex) {
+      setMergeDraggedIndex(null);
+      setMergeDragOverIndex(null);
+      return;
+    }
+
+    setMergeOrder(prev => {
+      const newOrder = [...prev];
+      const [dragged] = newOrder.splice(mergeDraggedIndex, 1);
+      newOrder.splice(targetIndex, 0, dragged);
+      return newOrder;
+    });
+
+    setMergeDraggedIndex(null);
+    setMergeDragOverIndex(null);
+  };
+
+  const handleMergeDragEnd = () => {
+    setMergeDraggedIndex(null);
+    setMergeDragOverIndex(null);
+  };
+
+  const mergePDFs = async () => {
+    if (mergeOrder.length === 0) {
+      showAlert('error', 'No pages in merge queue');
+      return;
+    }
+    
+    setIsProcessing(true);
+    try {
+      const mergedPdf = await pdfLib.PDFDocument.create();
+      
+      const loadedDocs = new Map<string, pdfLib.PDFDocument>();
+      
+      for (const mergePage of mergeOrder) {
+        let sourceDoc = loadedDocs.get(mergePage.fileId);
+        
+        if (!sourceDoc) {
+          const file = files.find(f => f.id === mergePage.fileId);
+          if (!file) continue;
+          const arrayBuffer = await file.file.arrayBuffer();
+          sourceDoc = await pdfLib.PDFDocument.load(arrayBuffer);
+          loadedDocs.set(mergePage.fileId, sourceDoc);
+        }
+        
+        const pageIndex = mergePage.pageIndex - 1;
+        if (pageIndex >= 0 && pageIndex < sourceDoc.getPageCount()) {
+          const [copiedPage] = await mergedPdf.copyPages(sourceDoc, [pageIndex]);
+          
+          const key = `${mergePage.fileId}-${mergePage.pageIndex}`;
+          const rotation = mergeRotations.get(key);
+          if (rotation && rotation !== 0) {
+            const currentRotation = copiedPage.getRotation().angle;
+            copiedPage.setRotation(pdfLib.degrees(currentRotation + rotation));
+          }
+          
+          mergedPdf.addPage(copiedPage);
+        }
+      }
+      
+      const pdfBytes = await mergedPdf.save();
+      downloadBlob(pdfBytes, 'merged.pdf');
+      showAlert('success', `Merged ${mergeOrder.length} pages into a single PDF`);
+    } catch {
+      showAlert('error', 'Failed to merge PDFs');
+    }
+    setIsProcessing(false);
+  };
+
   const renderPopupPage = useCallback(async () => {
     if (!currentFile || !popupPage || !popupCanvasRef.current) return;
     
@@ -805,6 +1064,67 @@ function App() {
     renderPopupPage();
   }, [renderPopupPage]);
 
+  useEffect(() => {
+    if (!mergePopupPage) return;
+    
+    const file = files.find(f => f.id === mergePopupPage.fileId);
+    if (!file) return;
+    
+    const canvas = document.getElementById('merge-popup-canvas') as HTMLCanvasElement;
+    if (!canvas) return;
+    
+    const rotation = mergeRotations.get(`${mergePopupPage.fileId}-${mergePopupPage.pageIndex}`) || 0;
+    
+    const render = async () => {
+      try {
+        const pdfjsLib = await import('pdfjs-dist');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs`;
+        
+        const arrayBuffer = await file.file.arrayBuffer();
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        const pdf = await loadingTask.promise;
+        const page = await pdf.getPage(mergePopupPage.pageIndex);
+        
+        const scale = (popupZoom / 100) * 1.5;
+        const viewport = page.getViewport({ scale });
+        
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        
+        const context = canvas.getContext('2d');
+        if (!context) return;
+        
+        if (rotation) {
+          context.save();
+          if (rotation === 90 || rotation === 270) {
+            canvas.width = viewport.height;
+            canvas.height = viewport.width;
+            context.translate(canvas.width / 2, canvas.height / 2);
+            context.rotate((rotation * Math.PI) / 180);
+            context.translate(-viewport.height / 2, -viewport.width / 2);
+          } else {
+            context.translate(canvas.width / 2, canvas.height / 2);
+            context.rotate((rotation * Math.PI) / 180);
+            context.translate(-viewport.width / 2, -viewport.height / 2);
+          }
+        }
+        
+        await page.render({
+          canvasContext: context,
+          viewport: viewport
+        }).promise;
+        
+        if (rotation) {
+          context.restore();
+        }
+      } catch (err) {
+        console.error('Error rendering merge popup:', err);
+      }
+    };
+    
+    render();
+  }, [mergePopupPage, popupZoom, mergeRotations, files]);
+
   const closePopup = () => {
     setPopupPage(null);
   };
@@ -842,25 +1162,35 @@ function App() {
 
       <main className="main-layout">
         <aside className="sidebar">
+        {!currentFile && (
           <div 
             className={`panel upload-zone ${isDragging ? 'drag-active' : ''}`}
             onDragOver={handleFileDragOver}
             onDragLeave={handleFileDragLeave}
             onDrop={handleFileDrop}
             onClick={() => fileInputRef.current?.click()}
+            onMouseMove={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const x = ((e.clientX - rect.left) / rect.width) * 100;
+              const y = ((e.clientY - rect.top) / rect.height) * 100;
+              e.currentTarget.style.setProperty('--mouse-x', `${x}%`);
+              e.currentTarget.style.setProperty('--mouse-y', `${y}%`);
+            }}
           >
-            <Upload size={32} className="icon" />
-            <h2>Drop PDFs here</h2>
-            <p>or click to browse files</p>
+            <Upload className="icon" size={48} />
+            <h2>Drop PDF here</h2>
+            <p>or click to browse your files</p>
+            <p className="hint">Your files never leave your device</p>
             <input 
               type="file" 
-              multiple 
-              accept=".pdf,application/pdf" 
-              className="hidden-input"
-              ref={fileInputRef}
-              onChange={handleFileSelect}
+              ref={fileInputRef} 
+              onChange={handleFileSelect} 
+              accept=".pdf" 
+              style={{ display: 'none' }}
+              multiple
             />
           </div>
+          )}
 
           {files.length > 0 && (
             <div className="panel">
@@ -919,6 +1249,14 @@ function App() {
               >
                 <Minimize2 size={20} />
                 Compress
+              </button>
+              <button 
+                className={`tool-btn ${activeTool === 'merge' ? 'active' : ''}`}
+                onClick={() => setActiveTool('merge')}
+                disabled={files.length === 0}
+              >
+                <GitMerge size={20} />
+                Merge
               </button>
             </div>
           </div>
@@ -979,10 +1317,213 @@ function App() {
               </button>
             </div>
           )}
+
+          {activeTool === 'merge' && files.length > 0 && (
+            <div className="panel">
+              <h3>
+                <GitMerge size={16} className="panel-icon" />
+                Merge PDF
+              </h3>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                Select pages from uploaded PDFs to merge them into a single document.
+              </p>
+              <button className="primary-btn" onClick={mergePDFs} disabled={isProcessing || mergeOrder.length === 0}>
+                {isProcessing ? <Loader size={16} /> : <Download size={16} />}
+                Merge & Download
+              </button>
+            </div>
+          )}
         </aside>
 
         <section className="viewer-area">
-          <div className="viewer-panel">
+          {activeTool === 'merge' ? (
+            <div className="merge-tool">
+              <div className="merge-queue-panel">
+                <div className="merge-queue-header">
+                  <h3>
+                    <GitMerge size={18} />
+                    Merge Queue
+                  </h3>
+                  {mergeOrder.length > 0 && (
+                    <div className="selection-toolbar">
+                      <div className="toolbar-center">
+                        <span>{mergeOrder.length} pages</span>
+                      </div>
+                      <div className="toolbar-right">
+                        <button className="toolbar-btn" onClick={clearMergeQueue}>
+                          <X size={14} />
+                          Clear All
+                        </button>
+                        <button className="toolbar-btn primary-btn" onClick={mergePDFs} disabled={isProcessing}>
+                          {isProcessing ? <Loader size={14} /> : <Download size={14} />}
+                          Merge & Download
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                {mergeOrder.length > 0 ? (
+                  <div 
+                    className="merge-queue-grid"
+                    onDragOver={(e) => e.preventDefault()}
+                  >
+                    {mergeOrder.map((mergePage, index) => {
+                      const file = files.find(f => f.id === mergePage.fileId);
+                      const cacheKey = `${mergePage.fileId}-${mergePage.pageIndex}`;
+                      const itemKey = `merge-${mergePage.fileId}-${mergePage.pageIndex}`;
+                      const rotation = mergeRotations.get(cacheKey) || 0;
+                      
+                      return (
+                        <div
+                          key={itemKey}
+                          className={`merge-queue-item ${mergeDraggedIndex === index ? 'dragging' : ''} ${mergeDragOverIndex === index ? 'drag-over' : ''}`}
+                          draggable={true}
+                          onDragStart={(e) => handleMergeDragStart(e, index)}
+                          onDragOver={(e) => handleMergeDragOver(e, index)}
+                          onDragLeave={handleMergeDragLeave}
+                          onDrop={(e) => handleMergeDrop(e, index)}
+                          onDragEnd={handleMergeDragEnd}
+                        >
+                          <GripVertical className="merge-drag-handle" size={14} />
+                          <span className="merge-page-num">{mergePage.pageIndex}</span>
+                          <img
+                            src={mergeThumbCache.current.get(cacheKey) || "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"}
+                            className={`merge-thumb-canvas merge-thumb-${cacheKey.replace(/[^a-zA-Z0-9]/g, '-')}`}
+                            alt={`Page ${mergePage.pageIndex}`}
+                            onClick={(e) => { e.stopPropagation(); openMergePopup(mergePage.fileId, mergePage.pageIndex); }}
+                            style={rotation ? { transform: `rotate(${rotation}deg)` } : undefined}
+                            ref={(el) => {
+                              if (el) renderMergeThumbnail(mergePage.fileId, mergePage.pageIndex);
+                            }}
+                          />
+                          <div className="merge-source-badge" style={{ background: `hsl(${file ? files.indexOf(file) * 60 : 0}, 70%, 50%)` }}>
+                            {file?.name.substring(0, 8) || 'Unknown'}
+                          </div>
+                          <button 
+                            className="merge-rotate-btn"
+                            onClick={(e) => { e.stopPropagation(); rotateMergePage(mergePage.fileId, mergePage.pageIndex, 90); }}
+                            title="Rotate 90°"
+                          >
+                            <RotateCw size={10} />
+                          </button>
+                          <button 
+                            className="merge-remove-btn"
+                            onClick={(e) => { e.stopPropagation(); removeFromMerge(index); }}
+                            title="Remove from queue"
+                          >
+                            <X size={10} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="merge-empty">
+                    <p>No pages selected yet</p>
+                    <p style={{ fontSize: '0.75rem' }}>Select pages from PDFs below to add them to the merge queue</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="source-pdfs">
+                <div className="source-pdfs-header">
+                  <h3>
+                    <FilePlus size={18} />
+                    Source PDFs
+                  </h3>
+                  <button 
+                    className="toolbar-btn"
+                    onClick={() => mergeInputRef.current?.click()}
+                  >
+                    <Plus size={14} />
+                    Add More
+                  </button>
+                  <input
+                    type="file"
+                    multiple
+                    accept=".pdf,application/pdf"
+                    className="hidden-input"
+                    ref={mergeInputRef}
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                        handleFiles(e.target.files);
+                      }
+                      if (mergeInputRef.current) mergeInputRef.current.value = '';
+                    }}
+                  />
+                </div>
+
+                {files.map((file, fileIndex) => {
+                  
+                  return (
+                    <div key={file.id} className="source-file-section" style={{ borderLeftColor: `hsl(${fileIndex * 60}, 70%, 50%)` }}>
+                      <div className="source-file-header">
+                        <div className="source-file-info">
+                          <FileText size={16} className="file-icon" />
+                          <span className="source-file-name">{file.name}</span>
+                          <span className="source-file-meta">{file.pageCount} pages</span>
+                        </div>
+                        <div className="source-file-actions">
+                          <button 
+                            className="toolbar-btn"
+                            onClick={() => selectAllInFile(file.id)}
+                          >
+                            <Check size={12} />
+                            Select All
+                          </button>
+                          <button 
+                            className="toolbar-btn"
+                            onClick={() => clearSelectionInFile(file.id)}
+                          >
+                            <X size={12} />
+                            Clear
+                          </button>
+                          <button 
+                            className="icon-btn danger"
+                            onClick={() => removeFile(file.id)}
+                            title="Remove file"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                      
+                      <div className="source-pages-grid">
+                        {Array.from({ length: file.pageCount }, (_, i) => i + 1).map(pageNum => {
+                          const isSelected = mergeSelections.has(`${file.id}-${pageNum}`);
+                          
+                          return (
+                            <div
+                              key={`source-${file.id}-${pageNum}`}
+                              className={`source-page-item ${isSelected ? 'selected' : ''}`}
+                            >
+                              <div className="source-page-checkbox" onClick={() => toggleMergeSelection(file.id, pageNum)}>
+                                <input 
+                                  type="checkbox" 
+                                  checked={isSelected}
+                                  onChange={() => {}}
+                                />
+                              </div>
+                              <img
+                                src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+                                className={`source-thumb-canvas merge-thumb-${file.id.replace(/[^a-zA-Z0-9]/g, '-')}-${pageNum}`}
+                                ref={(el) => { if (el) renderMergeThumbnail(file.id, pageNum); }}
+                                alt={`Page ${pageNum}`}
+                                onClick={(e) => { e.stopPropagation(); openMergePopup(file.id, pageNum); }}
+                              />
+                              <span className="source-page-num">{pageNum}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="viewer-panel">
             {currentFile ? (
               <>
                 <div className="selection-toolbar">
@@ -1134,65 +1675,53 @@ function App() {
                 <p>Upload a PDF file to view, edit, merge, or compress it entirely in your browser.</p>
               </div>
             )}
-          </div>
+            </div>
+          )}
         </section>
       </main>
 
-      {popupPage && (
-        <div className="popup-overlay" onClick={closePopup}>
-          <div className="popup-content" onClick={(e) => e.stopPropagation()}>
-            <div className="popup-header">
-              <div style={{ width: 32 }} />
-              <span>Page {popupPage} of {totalPages}</span>
-              <button className="popup-close" onClick={closePopup}>
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="popup-body">
-              <button 
-                className="popup-nav prev"
-                onClick={() => setPopupPage(p => p !== null ? Math.max(1, p - 1) : 1)}
-                disabled={popupPage === 1}
-              >
-                <ChevronLeft size={24} />
-              </button>
-              
-              <canvas ref={popupCanvasRef} className="popup-canvas" />
-              
-              <button 
-                className="popup-nav next"
-                onClick={() => setPopupPage(p => p !== null ? Math.min(totalPages, p + 1) : 1)}
-                disabled={popupPage === totalPages}
-              >
-                <ChevronRight size={24} />
-              </button>
-            </div>
-            
-            <div className="popup-footer">
-              <button 
-                className="popup-zoom-btn"
-                onClick={() => setPopupZoom(z => Math.max(25, z - 25))}
-              >
-                <ZoomOut size={16} />
-              </button>
-              <span className="zoom-value">{popupZoom}%</span>
-              <button 
-                className="popup-zoom-btn"
-                onClick={() => setPopupZoom(z => Math.min(300, z + 25))}
-              >
-                <ZoomIn size={16} />
-              </button>
-              <button 
-                className="popup-zoom-btn fit-btn"
-                onClick={() => setPopupZoom(100)}
-              >
-                Fit
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <PopupPage
+        isOpen={popupPage !== null}
+        currentPage={popupPage || 1}
+        totalPages={totalPages}
+        onClose={closePopup}
+        onPrev={() => setPopupPage(p => p !== null ? Math.max(1, p - 1) : 1)}
+        onNext={() => setPopupPage(p => p !== null ? Math.min(totalPages, p + 1) : 1)}
+        zoomValue={popupZoom}
+        onZoomIn={() => setPopupZoom(z => Math.min(300, z + 25))}
+        onZoomOut={() => setPopupZoom(z => Math.max(25, z - 25))}
+        onFit={() => setPopupZoom(100)}
+      >
+        <canvas ref={popupCanvasRef} className="popup-canvas" />
+      </PopupPage>
+
+      {mergePopupPage && (() => {
+        const file = files.find(f => f.id === mergePopupPage.fileId);
+        return (
+          <PopupPage
+            isOpen={true}
+            currentPage={mergePopupPage.pageIndex}
+            totalPages={file?.pageCount || 1}
+            onClose={() => setMergePopupPage(null)}
+            onPrev={() => {
+              if (mergePopupPage.pageIndex > 1) {
+                setMergePopupPage({ ...mergePopupPage, pageIndex: mergePopupPage.pageIndex - 1 });
+              }
+            }}
+            onNext={() => {
+              if (file && mergePopupPage.pageIndex < file.pageCount) {
+                setMergePopupPage({ ...mergePopupPage, pageIndex: mergePopupPage.pageIndex + 1 });
+              }
+            }}
+            zoomValue={popupZoom}
+            onZoomIn={() => setPopupZoom(z => Math.min(300, z + 25))}
+            onZoomOut={() => setPopupZoom(z => Math.max(25, z - 25))}
+            onFit={() => setPopupZoom(100)}
+          >
+            <canvas className="popup-canvas merge-popup-canvas" id="merge-popup-canvas" />
+          </PopupPage>
+        );
+      })()}
     </div>
   );
 }
