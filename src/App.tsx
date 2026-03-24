@@ -11,6 +11,7 @@ import qpdfWasm from 'qpdf-wasm-esm-embedded';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import ThemeToggle from './components/ThemeToggle';
 import { PopupPage } from './components/PopupPage';
+import { Footer } from './components/Footer';
 import './App.scss';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -1919,6 +1920,7 @@ function App() {
           </PopupPage>
         );
       })()}
+      <Footer />
     </div>
   );
 }

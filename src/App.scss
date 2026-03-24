@@ -2286,3 +2286,106 @@ h1, h2, h3, h4, h5, h6 {
     z-index: 0;
   }
 }
+
+.seo-footer {
+  margin-top: 4rem;
+  padding: 4rem 2rem;
+  background-color: var(--bg-dark);
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  position: relative;
+  z-index: 10;
+
+  .footer-container {
+    max-width: 1200px;
+    margin: 0 auto;
+
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 3rem;
+      margin-bottom: 3rem;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    h2 {
+      color: var(--text-main);
+      font-size: 1.75rem;
+      margin-bottom: 1.5rem;
+      font-family: var(--font-heading);
+      text-align: center;
+    }
+
+    h3 {
+      color: var(--text-main);
+      font-size: 1.25rem;
+      margin-bottom: 1.25rem;
+      font-family: var(--font-heading);
+      text-align: center;
+    }
+
+    p {
+      line-height: 1.7;
+      margin-bottom: 1.5rem;
+      font-size: 0.95rem;
+      text-align: center;
+    }
+
+    .footer-feature-list {
+      list-style-type: none;
+      padding-left: 0;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1.5rem;
+
+      @media (max-width: 640px) {
+        grid-template-columns: 1fr;
+      }
+
+      li {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        background: var(--bg-card);
+        padding: 1.25rem;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border);
+
+        .feature-icon {
+          color: var(--primary);
+          flex-shrink: 0;
+          margin-top: 2px;
+        }
+
+        strong {
+          color: var(--text-main);
+          font-weight: 600;
+        }
+      }
+    }
+
+    .footer-bottom {
+      margin-top: 3rem;
+      padding-top: 2rem;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      opacity: 0.8;
+    }
+  }
+}
+
+.noscript-banner {
+  background-color: var(--warning);
+  color: #000;
+  padding: 1rem;
+  text-align: center;
+  font-weight: 600;
+  margin-bottom: 2rem;
+  border-radius: var(--radius-md);
+}
