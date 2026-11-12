@@ -2,7 +2,7 @@
 
 A powerful, browser-based PDF manipulation toolkit that puts privacy first. All processing happens locally in your browser—your files never leave your computer. Optimized for speed and security.
 
-**Live Demo**: [https://chrisjdj.github.io/web-tools/PDF-Toolkit](https://chrisjdj.github.io/web-tools/PDF-Toolkit)
+**Live Demo**: [https://chrisjdj.github.io/PDF-Toolkit/](https://chrisjdj.github.io/PDF-Toolkit/)
 
 ## 🚀 Features
 

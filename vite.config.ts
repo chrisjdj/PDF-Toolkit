@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react';
 // pdf.js, pdf-lib and qpdf (WASM) are all loaded on demand via dynamic import(),
 // so the initial bundle only contains React and the UI.
 export default defineConfig({
-  base: '/web-tools/PDF-Toolkit/',
+  base: '/PDF-Toolkit/',
   plugins: [react()],
   build: {
     target: 'es2022',
