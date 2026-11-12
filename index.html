@@ -3,17 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#07070a" />
-    <meta name="color-scheme" content="dark light" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)" />
     <script>
-      // Apply the saved/system theme before first paint to avoid a flash of the wrong theme.
+      // Theme preference: 'system' (default) | 'light' | 'dark'. Applied before first
+      // paint so there is no flash. Shared across all tools on this origin. See DESIGN.md.
       (function () {
-        var t;
-        try { t = localStorage.getItem('pdf-theme'); } catch (e) {}
-        if (t !== 'light' && t !== 'dark') {
-          t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-        }
-        document.documentElement.setAttribute('data-theme', t);
+        try {
+          var d = document.documentElement, ls = localStorage;
+          // One-time cleanup: earlier versions stored the OS value as if it were a choice.
+          ls.removeItem('theme');
+          ls.removeItem('pdf-theme');
+          var p = ls.getItem('theme-preference');
+          if (p !== 'light' && p !== 'dark') p = 'system';
+          d.setAttribute('data-theme-pref', p);
+          if (p !== 'system') {
+            d.setAttribute('data-theme', p);
+            var c = p === 'dark' ? '#09090b' : '#fafafa';
+            var m = document.querySelectorAll('meta[name="theme-color"]');
+            for (var i = 0; i < m.length; i++) m[i].setAttribute('content', c);
+          }
+        } catch (e) {}
       })();
     </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />

@@ -1,5 +1,5 @@
 import { useRef, type Dispatch, type KeyboardEvent } from 'react';
-import { Check, Download, GripVertical, Loader, RotateCw, Trash2, Undo2 } from 'lucide-react';
+import { CheckSquare, Download, GripVertical, Loader, RotateCw, Trash2, Undo2 } from 'lucide-react';
 import type { PDFFile } from '../types';
 import { isDirty, type EditorAction, type EditorState } from '../state/editor';
 import { useReorder } from '../hooks/useReorder';
@@ -27,14 +27,15 @@ export function PageGrid({ file, state, dispatch, busy, onPreview, onSave, onDis
   const selectedCount = state.selected.size;
 
   return (
-    <>
-      <div className="selection-toolbar">
-        <div className="toolbar-left">
-          <button className="toolbar-btn" onClick={() => dispatch({ type: 'selectAll', fileId })}>
-            <Check size={14} /> Select all
+    <div className="card page-editor">
+      <div className="editor-toolbar">
+        <div className="editor-toolbar__group">
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => dispatch({ type: 'selectAll', fileId })}>
+            <CheckSquare size={16} aria-hidden="true" /> Select all
           </button>
           <button
-            className="toolbar-btn"
+            type="button"
+            className="btn btn--ghost btn--sm"
             onClick={() => dispatch({ type: 'clearSelection', fileId })}
             disabled={selectedCount === 0}
           >
@@ -42,31 +43,30 @@ export function PageGrid({ file, state, dispatch, busy, onPreview, onSave, onDis
           </button>
         </div>
 
-        <div className="toolbar-center" aria-live="polite">
-          <span>
-            {selectedCount > 0 ? `${selectedCount} of ${visibleCount} selected` : `${visibleCount} pages`}
-          </span>
-          {dirty && <span className="changes-indicator">• Unsaved changes</span>}
+        <div className="editor-toolbar__status" aria-live="polite">
+          <span>{selectedCount > 0 ? `${selectedCount} of ${visibleCount} selected` : `${visibleCount} pages`}</span>
+          {dirty && <span className="badge badge--warning">Unsaved changes</span>}
         </div>
 
-        <div className="toolbar-right">
+        <div className="editor-toolbar__group editor-toolbar__group--end">
           {dirty && (
-            <button className="toolbar-btn discard-btn" onClick={onDiscard}>
-              <Undo2 size={14} /> Discard
+            <button type="button" className="btn btn--secondary btn--sm" onClick={onDiscard}>
+              <Undo2 size={16} aria-hidden="true" /> Discard
             </button>
           )}
-          <button className="toolbar-btn primary-btn" onClick={onSave} disabled={busy || visibleCount === 0}>
-            {busy ? <Loader size={14} className="spin" /> : <Download size={14} />}
+          <button type="button" className="btn btn--primary btn--sm" onClick={onSave} disabled={busy || visibleCount === 0}>
+            {busy ? <Loader size={16} className="spin" aria-hidden="true" /> : <Download size={16} aria-hidden="true" />}
             {selectedCount > 0 ? `Save ${selectedCount} selected` : 'Save as PDF'}
           </button>
         </div>
       </div>
 
       <p className="grid-hint" id="page-grid-help">
-        Drag to reorder (long-press on touch). Keyboard: Alt+arrows move, Enter previews, Space selects, R rotates, Delete removes.
+        Drag to reorder (long-press on touch). Keyboard: <kbd>Alt</kbd>+arrows move, <kbd>Enter</kbd> previews,{' '}
+        <kbd>Space</kbd> selects, <kbd>R</kbd> rotates, <kbd>Delete</kbd> removes.
       </p>
 
-      <div className="thumbnail-grid" ref={gridRef} role="list" aria-describedby="page-grid-help">
+      <div className="page-grid" ref={gridRef} role="list" aria-describedby="page-grid-help">
         {state.order.map((pageNum, index) => {
           const isDeleted = state.deleted.has(pageNum);
           const isSelected = state.selected.has(pageNum);
@@ -89,11 +89,11 @@ export function PageGrid({ file, state, dispatch, busy, onPreview, onSave, onDis
           };
 
           const classes = [
-            'thumbnail-item',
-            isSelected && 'selected',
-            isDeleted && 'deleted',
-            draggedIndex === index && 'dragging',
-            overIndex === index && draggedIndex !== index && 'drag-over',
+            'page-card',
+            isSelected && 'is-selected',
+            isDeleted && 'is-deleted',
+            draggedIndex === index && 'is-dragging',
+            overIndex === index && draggedIndex !== index && 'is-drop-target',
           ]
             .filter(Boolean)
             .join(' ');
@@ -108,83 +108,88 @@ export function PageGrid({ file, state, dispatch, busy, onPreview, onSave, onDis
               {...dragProps}
               onKeyDown={handleKeyDown}
             >
-              <label className="thumbnail-checkbox">
-                <input
-                  type="checkbox"
-                  checked={isSelected}
+              <div className="page-card__media">
+                <button
+                  type="button"
+                  className="thumb-button"
+                  onClick={() => onPreview(pageNum)}
                   disabled={isDeleted}
-                  onChange={() => dispatch({ type: 'toggleSelect', fileId, pageNum })}
-                  aria-label={`Select page ${pageNum}`}
-                />
-              </label>
+                  tabIndex={-1}
+                  aria-label={`Preview page ${pageNum}`}
+                >
+                  <Thumbnail
+                    doc={file.doc}
+                    fileId={fileId}
+                    pageNum={pageNum}
+                    rotation={rotation}
+                    className="page-card__thumb"
+                    alt=""
+                  />
+                </button>
 
-              <GripVertical className="drag-handle" size={14} aria-hidden="true" />
+                <label className="thumb-check">
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    disabled={isDeleted}
+                    onChange={() => dispatch({ type: 'toggleSelect', fileId, pageNum })}
+                    aria-label={`Select page ${pageNum}`}
+                  />
+                </label>
 
-              <button
-                type="button"
-                className="thumb-preview-btn"
-                onClick={() => onPreview(pageNum)}
-                disabled={isDeleted}
-                tabIndex={-1}
-                aria-label={`Preview page ${pageNum}`}
-              >
-                <Thumbnail
-                  doc={file.doc}
-                  fileId={fileId}
-                  pageNum={pageNum}
-                  rotation={rotation}
-                  className="thumbnail-canvas"
-                  alt=""
-                />
-              </button>
+                <GripVertical className="drag-handle" size={16} aria-hidden="true" />
 
-              <div className="thumbnail-footer">
+                {isDeleted && (
+                  <span className="badge badge--danger removed-badge" aria-hidden="true">
+                    <Trash2 size={12} /> Removed
+                  </span>
+                )}
+              </div>
+
+              <div className="page-card__footer">
                 <span className={`page-number${isDeleted ? ' strikethrough' : ''}`}>
-                  <span className="page-label">Page </span>
+                  <span className="page-number__label">Page </span>
                   {pageNum}
                 </span>
-                <div className="thumbnail-actions">
+                <div className="page-card__actions">
                   {!isDeleted && (
                     <button
-                      className="rotate-btn"
+                      type="button"
+                      className="btn btn--ghost btn--icon thumb-action"
                       onClick={() => dispatch({ type: 'rotate', fileId, pageNum, angle: 90 })}
                       aria-label={`Rotate page ${pageNum} 90 degrees`}
                       title="Rotate 90°"
                     >
-                      <RotateCw size={12} />
+                      <RotateCw size={16} aria-hidden="true" />
                     </button>
                   )}
                   {isDeleted ? (
                     <button
-                      className="restore-btn"
+                      type="button"
+                      className="btn btn--secondary btn--icon thumb-action"
                       onClick={() => dispatch({ type: 'toggleDelete', fileId, pageNum })}
                       aria-label={`Restore page ${pageNum}`}
                       title="Restore page"
                     >
-                      <Check size={12} />
+                      <Undo2 size={16} aria-hidden="true" />
                     </button>
                   ) : (
                     <button
-                      className="delete-btn"
+                      type="button"
+                      className="btn btn--danger-ghost btn--icon thumb-action"
                       onClick={() => dispatch({ type: 'toggleDelete', fileId, pageNum })}
                       aria-label={`Remove page ${pageNum}`}
                       title="Remove page"
                     >
-                      <Trash2 size={12} />
+                      <Trash2 size={16} aria-hidden="true" />
                     </button>
                   )}
                 </div>
               </div>
-
-              {isDeleted && (
-                <div className="deleted-badge" aria-hidden="true">
-                  <Trash2 size={12} /> REMOVED
-                </div>
-              )}
             </div>
           );
         })}
       </div>
-    </>
+    </div>
   );
 }

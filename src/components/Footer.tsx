@@ -1,59 +1,57 @@
-import React from 'react';
-import { Shield, GitMerge, Scissors, Minimize2, FileText, Zap } from 'lucide-react';
+import { FileText, GitMerge, Minimize2, Scissors, Shield, Zap } from 'lucide-react';
 
-export const Footer: React.FC = () => {
+const FEATURES = [
+  { Icon: Shield, title: '100% client-side', text: 'No tracking, no analytics, no server storage.' },
+  { Icon: GitMerge, title: 'Merge & combine', text: 'Join pages from several PDFs into a single document.' },
+  { Icon: Scissors, title: 'Split & extract', text: 'Pull out any pages or ranges instantly.' },
+  { Icon: Minimize2, title: 'Compress PDFs', text: 'Reduce file size with local processing, even for scans.' },
+  { Icon: Zap, title: 'Fast & secure', text: 'WebAssembly gives near-native performance right in your tab.' },
+  { Icon: FileText, title: 'Page management', text: 'Rotate, reorder or remove pages with drag and drop.' },
+];
+
+export function Footer() {
   return (
-    <footer className="seo-footer">
+    <footer className="app-footer">
       <noscript>
         <div className="noscript-banner">
-          <p><strong>Note:</strong> PDF Toolkit requires JavaScript to process PDFs securely in your browser without sending data to a server. Please enable JavaScript to use the tools.</p>
+          <strong>Note:</strong> PDF Toolkit needs JavaScript to process PDFs in your browser without sending data to a
+          server. Please enable JavaScript to use the tools.
         </div>
       </noscript>
-      
-      <div className="footer-container">
-        <div className="footer-grid">
-          <div className="footer-main">
+
+      <div className="container">
+        <div className="app-footer__grid">
+          <div>
             <h2>About PDF Toolkit</h2>
-            <p>PDF Toolkit is a free, privacy-first PDF management suite designed for modern web browsers. Unlike traditional online PDF editors, all processing happens entirely on your device. We do not use servers to process your data, ensuring complete privacy and security for your sensitive documents.</p>
+            <p>
+              PDF Toolkit is a free, privacy-first PDF suite for modern browsers. Unlike traditional online PDF editors,
+              all processing happens on your device. No server ever sees your documents.
+            </p>
           </div>
 
-          <div className="footer-features">
-            <h3>Key Features</h3>
-            <ul className="footer-feature-list">
-              <li>
-                <div className="feature-icon" aria-hidden="true"><Shield size={16} /></div>
-                <span><strong>100% Client-Side</strong> — No tracking, no analytics, no server storage.</span>
-              </li>
-              <li>
-                <div className="feature-icon" aria-hidden="true"><GitMerge size={16} /></div>
-                <span><strong>Merge & Combine</strong> — Join multiple PDFs into a single document with ease.</span>
-              </li>
-              <li>
-                <div className="feature-icon" aria-hidden="true"><Scissors size={16} /></div>
-                <span><strong>Split & Extract</strong> — Break down large PDFs or extract specific pages instantly.</span>
-              </li>
-              <li>
-                <div className="feature-icon" aria-hidden="true"><Minimize2 size={16} /></div>
-                <span><strong>Compress PDFs</strong> — Reduce file sizes without compromising quality via local processing.</span>
-              </li>
-              <li>
-                <div className="feature-icon" aria-hidden="true"><Zap size={16} /></div>
-                <span><strong>Fast & Secure</strong> — Powered by WebAssembly for near-native performance right in your tab.</span>
-              </li>
-              <li>
-                <div className="feature-icon" aria-hidden="true"><FileText size={16} /></div>
-                <span><strong>Page Management</strong> — Rotate, reorder, or delete pages with a simple drag-and-drop interface.</span>
-              </li>
+          <div>
+            <h3>Key features</h3>
+            <ul className="app-footer__features">
+              {FEATURES.map(({ Icon, title, text }) => (
+                <li key={title}>
+                  <span className="feature-icon" aria-hidden="true">
+                    <Icon size={16} />
+                  </span>
+                  <strong>{title}</strong>
+                  <span>{text}</span>
+                </li>
+              ))}
             </ul>
           </div>
         </div>
-        
-        <div className="footer-bottom">
+
+        <div className="app-footer__bottom">
           <p>&copy; {new Date().getFullYear()} PDF Toolkit. Privacy-respecting and serverless.</p>
+          <a href="https://chrisjdj.github.io/web-tools/">More free tools</a>
         </div>
       </div>
     </footer>
   );
-};
+}
 
 export default Footer;

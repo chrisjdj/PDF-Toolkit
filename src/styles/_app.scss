@@ -1,0 +1,801 @@
+// =============================================================================
+// PDF-Toolkit specific components. Shared primitives live in _components.scss.
+// Semantic tokens only. The only literal colour is the white "paper" behind
+// rendered PDF pages (a page is content, not UI, and has no theme).
+// =============================================================================
+@use 'tokens' as t;
+
+// ---- Categorical file palette ---------------------------------------------------
+// Used for file icons, merge tags and source-file borders (via fileColor() in
+// lib/utils.ts). Every value is ≥3:1 against --surface in its theme.
+@mixin file-colors-light {
+  --file-1: #4f46e5; // indigo
+  --file-2: #b45309; // amber
+  --file-3: #047857; // emerald
+  --file-4: #db2777; // pink
+  --file-5: #0369a1; // sky
+  --file-6: #c2410c; // orange
+  --file-7: #7c3aed; // violet
+  --file-8: #0f766e; // teal
+  --file-9: #b91c1c; // red
+  --file-10: #4d7c0f; // lime
+}
+
+@mixin file-colors-dark {
+  --file-1: #818cf8;
+  --file-2: #fbbf24;
+  --file-3: #34d399;
+  --file-4: #f472b6;
+  --file-5: #38bdf8;
+  --file-6: #fb923c;
+  --file-7: #a78bfa;
+  --file-8: #2dd4bf;
+  --file-9: #f87171;
+  --file-10: #a3e635;
+}
+
+:root {
+  @include file-colors-light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    @include file-colors-dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  @include file-colors-dark;
+}
+
+$paper: #fff; // rendered PDF pages are always drawn on white paper
+
+// ---- Shared bits ----------------------------------------------------------------
+.panel-text {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.option-group {
+  gap: var(--space-2);
+
+  .radio-card > span {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+}
+
+.segmented__item:disabled {
+  opacity: 0.5;
+}
+
+.tool-switch .segmented__item {
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  min-width: 0;
+
+  svg {
+    flex-shrink: 0;
+  }
+}
+
+// Before any file is open, the workspace hosts the only upload CTA; on small screens
+// the (disabled) tool picker would just repeat the empty state, so hide it.
+.sidebar--idle {
+  @include t.down(lg) {
+    display: none;
+  }
+}
+
+.workspace {
+  border-radius: var(--radius-lg);
+
+  &.is-dragging {
+    outline: 2px dashed var(--accent);
+    outline-offset: 4px;
+  }
+}
+
+.section-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-4) 0;
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+}
+
+.card__title .badge {
+  margin-left: var(--space-1);
+}
+
+// ---- Empty state / upload -------------------------------------------------------
+.upload-dropzone {
+  min-height: clamp(260px, 45dvh, 440px);
+}
+
+.feature-tiles {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+
+  @include t.up(md) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.feature-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+
+  strong {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  &__icon {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    margin-bottom: var(--space-1);
+    border-radius: var(--radius-md);
+    background: var(--accent-subtle-bg);
+    color: var(--accent-subtle-text);
+  }
+}
+
+.empty-state--compact {
+  padding: var(--space-6) var(--space-4);
+
+  h3 {
+    font-size: var(--text-base);
+  }
+}
+
+// ---- Files card -----------------------------------------------------------------
+.files-card.is-dragging {
+  border-color: var(--accent);
+  border-style: dashed;
+  background: var(--accent-subtle-bg);
+}
+
+.file-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: calc(var(--space-2) * -1);
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding-right: var(--space-1);
+  border-radius: var(--radius-md);
+
+  &.is-active {
+    background: var(--accent-subtle-bg);
+  }
+
+  &__select {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-height: var(--control-h-lg);
+    padding: var(--space-2);
+    border: 0;
+    border-radius: var(--radius-md);
+    background: transparent;
+    text-align: left;
+
+    @include t.hover {
+      background: var(--surface-hover);
+    }
+  }
+
+  &.is-active &__select {
+    @include t.hover {
+      background: transparent;
+    }
+  }
+
+  &__icon {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+  }
+
+  &__info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  &__name {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__meta {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+  }
+}
+
+// ---- Page thumbnails (shared by editor, merge queue and source pages) --------------
+.thumb-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: zoom-in;
+
+  &:disabled {
+    cursor: default;
+  }
+}
+
+.thumb-frame {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+
+  img {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    background: $paper;
+    box-shadow: var(--shadow-sm);
+    transition: transform var(--duration-base) var(--ease-out);
+  }
+
+  &.is-loading {
+    background: linear-gradient(90deg, var(--skeleton) 0%, var(--surface-hover) 50%, var(--skeleton) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+  }
+}
+
+// Checkbox overlay. It sits on top of page content, so it carries its own surface.
+.thumb-check {
+  position: absolute;
+  top: var(--space-1);
+  left: var(--space-1);
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+
+  input {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--accent);
+    cursor: inherit;
+  }
+
+  &:has(input:disabled) {
+    display: none;
+  }
+
+  @include t.coarse {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+.drag-handle {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  padding: 2px;
+  box-sizing: content-box;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-subtle);
+  pointer-events: none;
+
+  // Touch reorders via long-press; the grip is only a hint for mouse users.
+  @media (hover: none) {
+    display: none;
+  }
+}
+
+.thumb-action {
+  width: 32px;
+  min-width: 32px;
+  min-height: 32px;
+
+  @include t.coarse {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+// Shared draggable-item states
+.page-card,
+.merge-chip {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition:
+    border-color var(--duration-fast) ease,
+    box-shadow var(--duration-fast) ease,
+    opacity var(--duration-fast) ease;
+
+  @include t.hover {
+    border-color: var(--border-strong);
+  }
+
+  &.is-dragging {
+    opacity: 0.4;
+    cursor: grabbing;
+  }
+
+  &.is-drop-target {
+    outline: 2px dashed var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+// ---- Page editor ----------------------------------------------------------------
+.editor-toolbar {
+  position: sticky;
+  top: var(--header-height);
+  z-index: calc(var(--z-sticky) - 1);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--surface);
+
+  &__group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+
+    &--end {
+      margin-left: auto;
+    }
+  }
+
+  &__status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.grid-hint {
+  padding: var(--space-3) var(--space-4) 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+
+  kbd {
+    font-size: 0.7rem;
+  }
+
+  @media (hover: none) {
+    display: none;
+  }
+}
+
+.page-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: var(--space-3);
+  padding: var(--space-3);
+
+  @include t.up(md) {
+    grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+    padding: var(--space-4);
+  }
+
+  @include t.coarse {
+    grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  }
+}
+
+.page-card {
+  &__media {
+    position: relative;
+    padding: var(--space-2);
+    border-radius: calc(var(--radius-md) - 1px) calc(var(--radius-md) - 1px) 0 0;
+    background: var(--surface-sunken);
+  }
+
+  &__footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-1) var(--space-1) var(--space-2);
+    border-top: 1px solid var(--border);
+  }
+
+  &__actions {
+    display: flex;
+    gap: 2px;
+    margin-left: auto;
+  }
+
+  &.is-selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+
+    .page-card__media {
+      background: var(--accent-subtle-bg);
+    }
+  }
+
+  &.is-deleted {
+    border-style: dashed;
+    border-color: var(--danger-border);
+
+    .thumb-frame img {
+      filter: grayscale(1);
+      opacity: 0.4;
+    }
+  }
+}
+
+.page-number {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+
+  &.strikethrough {
+    color: var(--danger-text);
+    text-decoration: line-through;
+    text-decoration-thickness: 2px;
+  }
+}
+
+.removed-badge {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-3);
+  transform: translateX(-50%);
+  width: max-content;
+  box-shadow: var(--shadow-sm);
+
+  svg {
+    flex-shrink: 0;
+  }
+  // Opaque base so the tinted badge stays legible over page content.
+  background-color: var(--surface);
+  background-image: linear-gradient(var(--danger-bg), var(--danger-bg));
+}
+
+// ---- Merge tool -----------------------------------------------------------------
+.merge-queue__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: var(--space-3);
+  padding: var(--space-4);
+
+  @include t.coarse {
+    grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  }
+}
+
+.merge-chip {
+  gap: var(--space-2);
+  padding: var(--space-2);
+
+  &__media {
+    position: relative;
+    padding: var(--space-1);
+    border-radius: var(--radius-sm);
+    background: var(--surface-sunken);
+  }
+
+  &__position {
+    position: absolute;
+    top: var(--space-1);
+    left: var(--space-1);
+    background: var(--surface);
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    box-shadow: var(--shadow-sm);
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 2px;
+  }
+}
+
+.file-tag {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+
+  &__dot {
+    flex-shrink: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  &__name {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+}
+
+.source-pdfs__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.source-file {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: var(--radius-md);
+
+  &__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2) var(--space-3);
+  }
+
+  &__info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+    flex: 1 1 12rem;
+
+    svg {
+      flex-shrink: 0;
+    }
+  }
+
+  &__name {
+    min-width: 0;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  &__meta {
+    flex-shrink: 0;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  &__pages {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: var(--space-2);
+
+    @include t.coarse {
+      grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+    }
+  }
+}
+
+.source-page {
+  position: relative;
+  padding: var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  transition: border-color var(--duration-fast) ease;
+
+  @include t.hover {
+    border-color: var(--border-strong);
+  }
+
+  &.is-selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+    background: var(--accent-subtle-bg);
+  }
+
+  &__num {
+    position: absolute;
+    right: var(--space-1);
+    bottom: var(--space-1);
+    background: var(--surface);
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+  }
+}
+
+// ---- Preview dialog -------------------------------------------------------------
+.preview-dialog {
+  // Fixed height so the page area can be measured; <sm the shared .dialog is a full-screen sheet.
+  @include t.up(sm) {
+    height: calc(100dvh - 2 * var(--space-4));
+  }
+
+  .dialog__title {
+    order: 1;
+  }
+
+  .preview-close {
+    order: 2;
+  }
+
+  @include t.up(sm) {
+    .dialog__title,
+    .preview-close {
+      order: 0;
+    }
+  }
+}
+
+.preview-nav {
+  order: 3;
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+
+  @include t.up(sm) {
+    order: 0;
+    flex-basis: auto;
+  }
+
+  &__label {
+    min-width: 6.5rem;
+    text-align: center;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__position {
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+}
+
+.preview-body {
+  display: flex;
+  padding: var(--space-4);
+  background: var(--surface-sunken);
+
+  // margin:auto centres the page but still lets it scroll fully when zoomed in
+  .popup-canvas-host {
+    margin: auto;
+    line-height: 0;
+  }
+
+  .popup-canvas {
+    background: $paper;
+    border-radius: 2px;
+    box-shadow: var(--shadow-md);
+  }
+}
+
+.preview-footer {
+  justify-content: center;
+
+  &__zoom {
+    min-width: 4.5ch;
+    text-align: center;
+    font-size: var(--text-sm);
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__hint {
+    display: none;
+    margin-left: auto;
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+
+    @media (hover: hover) {
+      @include t.up(md) {
+        display: inline;
+      }
+    }
+  }
+}
+
+// ---- Processing overlay ---------------------------------------------------------
+.processing-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: var(--overlay);
+  animation: fade-in var(--duration-base) ease;
+
+  &__panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-6) var(--space-8);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-lg);
+    font-weight: 500;
+  }
+}

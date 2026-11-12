@@ -39,7 +39,6 @@ pnpm-debug.log*
 .Spotlight-V100
 .Trashes
 ehthumbs.db
-.gstack/
 
 # Local tooling state
 .gstack/
