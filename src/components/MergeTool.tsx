@@ -1,5 +1,5 @@
 import { useMemo, useRef, type Dispatch, type KeyboardEvent } from 'react';
-import { Check, Download, FilePlus, FileText, GitMerge, GripVertical, Loader, Plus, RotateCw, Trash2, X } from 'lucide-react';
+import { Download, FilePlus, FileText, GitMerge, GripVertical, ListPlus, Loader, Plus, RotateCw, Trash2, X } from 'lucide-react';
 import type { PDFFile } from '../types';
 import type { MergeAction, MergeItem } from '../state/merge';
 import { useReorder } from '../hooks/useReorder';
@@ -26,21 +26,21 @@ export function MergeTool({ files, queue, dispatch, busy, onMerge, onAddFiles, o
   const queued = useMemo(() => new Set(queue.map(i => `${i.fileId}:${i.pageNum}`)), [queue]);
 
   return (
-    <div className="merge-tool">
-      <section className="merge-queue-panel" aria-labelledby="merge-queue-title">
-        <div className="merge-queue-header">
-          <h3 id="merge-queue-title">
-            <GitMerge size={18} />
+    <>
+      <section className="card merge-queue" aria-labelledby="merge-queue-title">
+        <div className="section-header">
+          <h2 id="merge-queue-title" className="card__title">
+            <GitMerge size={16} aria-hidden="true" />
             Merge queue
-          </h3>
+            {queue.length > 0 && <span className="badge badge--accent">{queue.length} pages</span>}
+          </h2>
           {queue.length > 0 && (
-            <div className="toolbar-right">
-              <span className="merge-count">{queue.length} pages</span>
-              <button className="toolbar-btn" onClick={() => dispatch({ type: 'clear' })}>
-                <X size={14} /> Clear all
+            <div className="section-header__actions">
+              <button type="button" className="btn btn--ghost btn--sm" onClick={() => dispatch({ type: 'clear' })}>
+                <X size={16} aria-hidden="true" /> Clear all
               </button>
-              <button className="toolbar-btn primary-btn" onClick={onMerge} disabled={busy}>
-                {busy ? <Loader size={14} className="spin" /> : <Download size={14} />}
+              <button type="button" className="btn btn--primary btn--sm" onClick={onMerge} disabled={busy}>
+                {busy ? <Loader size={16} className="spin" aria-hidden="true" /> : <Download size={16} aria-hidden="true" />}
                 Merge & download
               </button>
             </div>
@@ -48,7 +48,7 @@ export function MergeTool({ files, queue, dispatch, busy, onMerge, onAddFiles, o
         </div>
 
         {queue.length > 0 ? (
-          <div className="merge-queue-grid" ref={queueRef} role="list" aria-label="Pages to merge, in order">
+          <div className="merge-queue__grid" ref={queueRef} role="list" aria-label="Pages to merge, in order">
             {queue.map((item, index) => {
               const file = filesById.get(item.fileId);
               if (!file) return null;
@@ -63,9 +63,9 @@ export function MergeTool({ files, queue, dispatch, busy, onMerge, onAddFiles, o
                 e.preventDefault();
               };
               const classes = [
-                'merge-queue-item',
-                draggedIndex === index && 'dragging',
-                overIndex === index && draggedIndex !== index && 'drag-over',
+                'merge-chip',
+                draggedIndex === index && 'is-dragging',
+                overIndex === index && draggedIndex !== index && 'is-drop-target',
               ]
                 .filter(Boolean)
                 .join(' ');
@@ -80,116 +80,136 @@ export function MergeTool({ files, queue, dispatch, busy, onMerge, onAddFiles, o
                   {...dragProps}
                   onKeyDown={handleKeyDown}
                 >
-                  <GripVertical className="merge-drag-handle" size={14} aria-hidden="true" />
-                  <span className="merge-page-num">{item.pageNum}</span>
-                  <button
-                    type="button"
-                    className="thumb-preview-btn"
-                    tabIndex={-1}
-                    onClick={() => onPreview(item.fileId, item.pageNum)}
-                    aria-label={`Preview page ${item.pageNum} of ${file.name}`}
-                  >
-                    <Thumbnail
-                      doc={file.doc}
-                      fileId={file.id}
-                      pageNum={item.pageNum}
-                      rotation={item.rotation}
-                      className="merge-thumb-canvas"
-                      alt=""
-                    />
-                  </button>
-                  <div className="merge-source-badge" style={{ background: fileColor(file.colorIndex) }} title={file.name}>
-                    {file.name}
+                  <div className="merge-chip__media">
+                    <button
+                      type="button"
+                      className="thumb-button"
+                      tabIndex={-1}
+                      onClick={() => onPreview(item.fileId, item.pageNum)}
+                      aria-label={`Preview page ${item.pageNum} of ${file.name}`}
+                    >
+                      <Thumbnail
+                        doc={file.doc}
+                        fileId={file.id}
+                        pageNum={item.pageNum}
+                        rotation={item.rotation}
+                        className="merge-chip__thumb"
+                        alt=""
+                      />
+                    </button>
+                    <span className="badge merge-chip__position" aria-hidden="true">{index + 1}</span>
+                    <GripVertical className="drag-handle" size={16} aria-hidden="true" />
                   </div>
-                  <button
-                    className="merge-rotate-btn"
-                    onClick={() => dispatch({ type: 'rotate', uid: item.uid, angle: 90 })}
-                    aria-label={`Rotate page ${item.pageNum} of ${file.name}`}
-                    title="Rotate 90°"
-                  >
-                    <RotateCw size={10} />
-                  </button>
-                  <button
-                    className="merge-remove-btn"
-                    onClick={() => dispatch({ type: 'remove', uid: item.uid })}
-                    aria-label={`Remove page ${item.pageNum} of ${file.name} from queue`}
-                    title="Remove from queue"
-                  >
-                    <X size={10} />
-                  </button>
+                  <span className="file-tag" title={file.name}>
+                    <span className="file-tag__dot" style={{ background: fileColor(file.colorIndex) }} aria-hidden="true" />
+                    <span className="file-tag__name">p.{item.pageNum} · {file.name}</span>
+                  </span>
+                  <div className="merge-chip__actions">
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--icon thumb-action"
+                      onClick={() => dispatch({ type: 'rotate', uid: item.uid, angle: 90 })}
+                      aria-label={`Rotate page ${item.pageNum} of ${file.name}`}
+                      title="Rotate 90°"
+                    >
+                      <RotateCw size={16} aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--danger-ghost btn--icon thumb-action"
+                      onClick={() => dispatch({ type: 'remove', uid: item.uid })}
+                      aria-label={`Remove page ${item.pageNum} of ${file.name} from queue`}
+                      title="Remove from queue"
+                    >
+                      <X size={16} aria-hidden="true" />
+                    </button>
+                  </div>
                 </div>
               );
             })}
           </div>
         ) : (
-          <div className="merge-empty">
-            <p>No pages in the queue yet</p>
-            <p className="muted-small">Tick pages below, or use “Add all”, to add them in the order you want.</p>
+          <div className="empty-state empty-state--compact">
+            <span className="empty-state__icon" aria-hidden="true">
+              <ListPlus size={24} />
+            </span>
+            <h3>No pages in the queue yet</h3>
+            <p>Tick pages below, or use “Add all”, to add them in the order you want.</p>
           </div>
         )}
       </section>
 
-      <section className="source-pdfs" aria-labelledby="source-pdfs-title">
-        <div className="source-pdfs-header">
-          <h3 id="source-pdfs-title">
-            <FilePlus size={18} />
+      <section className="card source-pdfs" aria-labelledby="source-pdfs-title">
+        <div className="section-header">
+          <h2 id="source-pdfs-title" className="card__title">
+            <FilePlus size={16} aria-hidden="true" />
             Source PDFs
-          </h3>
-          <button className="toolbar-btn" onClick={onAddFiles}>
-            <Plus size={14} /> Add PDFs
-          </button>
+          </h2>
+          <div className="section-header__actions">
+            <button type="button" className="btn btn--secondary btn--sm" onClick={onAddFiles}>
+              <Plus size={16} aria-hidden="true" /> Add PDFs
+            </button>
+          </div>
         </div>
 
-        {files.map(file => (
-          <div key={file.id} className="source-file-section" style={{ borderLeftColor: fileColor(file.colorIndex) }}>
-            <div className="source-file-header">
-              <div className="source-file-info">
-                <FileText size={16} className="file-icon" />
-                <span className="source-file-name" title={file.name}>{file.name}</span>
-                <span className="source-file-meta">{file.pageCount} pages</span>
+        <div className="source-pdfs__list">
+          {files.map(file => (
+            <div key={file.id} className="source-file" style={{ borderLeftColor: fileColor(file.colorIndex) }}>
+              <div className="source-file__header">
+                <div className="source-file__info">
+                  <FileText size={16} aria-hidden="true" style={{ color: fileColor(file.colorIndex) }} />
+                  <span className="source-file__name" title={file.name}>{file.name}</span>
+                  <span className="source-file__meta">{file.pageCount} pages</span>
+                </div>
+                <div className="source-file__actions">
+                  <button type="button" className="btn btn--secondary btn--sm" onClick={() => dispatch({ type: 'addFile', fileId: file.id, pageCount: file.pageCount })}>
+                    <Plus size={16} aria-hidden="true" /> Add all
+                  </button>
+                  <button type="button" className="btn btn--ghost btn--sm" onClick={() => dispatch({ type: 'clearFile', fileId: file.id })}>
+                    <X size={16} aria-hidden="true" /> Clear
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--danger-ghost btn--icon btn--sm"
+                    onClick={() => onRemoveFile(file.id)}
+                    aria-label={`Remove ${file.name}`}
+                    title="Remove file"
+                  >
+                    <Trash2 size={16} aria-hidden="true" />
+                  </button>
+                </div>
               </div>
-              <div className="source-file-actions">
-                <button className="toolbar-btn" onClick={() => dispatch({ type: 'addFile', fileId: file.id, pageCount: file.pageCount })}>
-                  <Check size={12} /> Add all
-                </button>
-                <button className="toolbar-btn" onClick={() => dispatch({ type: 'clearFile', fileId: file.id })}>
-                  <X size={12} /> Clear
-                </button>
-                <button className="icon-btn danger" onClick={() => onRemoveFile(file.id)} aria-label={`Remove ${file.name}`} title="Remove file">
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
 
-            <div className="source-pages-grid">
-              {Array.from({ length: file.pageCount }, (_, i) => i + 1).map(pageNum => {
-                const isSelected = queued.has(`${file.id}:${pageNum}`);
-                return (
-                  <div key={pageNum} className={`source-page-item${isSelected ? ' selected' : ''}`}>
-                    <label className="source-page-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => dispatch({ type: 'toggle', fileId: file.id, pageNum })}
-                        aria-label={`Add page ${pageNum} of ${file.name} to merge queue`}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      className="thumb-preview-btn"
-                      onClick={() => onPreview(file.id, pageNum)}
-                      aria-label={`Preview page ${pageNum} of ${file.name}`}
-                    >
-                      <Thumbnail doc={file.doc} fileId={file.id} pageNum={pageNum} className="source-thumb-canvas" alt="" />
-                    </button>
-                    <span className="source-page-num">{pageNum}</span>
-                  </div>
-                );
-              })}
+              <div className="source-file__pages">
+                {Array.from({ length: file.pageCount }, (_, i) => i + 1).map(pageNum => {
+                  const isSelected = queued.has(`${file.id}:${pageNum}`);
+                  return (
+                    <div key={pageNum} className={`source-page${isSelected ? ' is-selected' : ''}`}>
+                      <button
+                        type="button"
+                        className="thumb-button"
+                        onClick={() => onPreview(file.id, pageNum)}
+                        aria-label={`Preview page ${pageNum} of ${file.name}`}
+                      >
+                        <Thumbnail doc={file.doc} fileId={file.id} pageNum={pageNum} className="source-page__thumb" alt="" />
+                      </button>
+                      <label className="thumb-check">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => dispatch({ type: 'toggle', fileId: file.id, pageNum })}
+                          aria-label={`Add page ${pageNum} of ${file.name} to merge queue`}
+                        />
+                      </label>
+                      <span className="badge source-page__num" aria-hidden="true">{pageNum}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </section>
-    </div>
+    </>
   );
 }

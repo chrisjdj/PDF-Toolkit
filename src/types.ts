@@ -7,7 +7,7 @@ export interface PDFFile {
   file: File;
   pageCount: number;
   doc: PDFDocumentProxy;
-  /** Stable index into FILE_COLORS, assigned when the file is added. */
+  /** Stable index into the file colour palette (see fileColor), assigned when the file is added. */
   colorIndex: number;
 }
 

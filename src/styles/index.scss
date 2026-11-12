@@ -1,0 +1,6 @@
+// Style entry point. Order matters: tokens/theme → base → shared components → shell → app.
+@use 'theme';
+@use 'base';
+@use 'components';
+@use 'shell';
+@use 'app';

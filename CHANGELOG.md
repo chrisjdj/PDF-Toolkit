@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2026-11-12
+
+### Changed
+- **Redesigned UI** on the design system shared by all the tools in the suite (see [DESIGN.md](./DESIGN.md)). It replaces the glassmorphic look with a clean product UI: neutral surfaces, a rose accent, subtle borders and shadows. The blur, gradients, noise and glow are gone, which also makes the app lighter on low-end phones.
+- **Theme switch:**
+  - A System / Light / Dark control in the header replaces the floating sun/moon button.
+  - System is the default; it follows the OS setting and updates live when the setting changes. On phones the switch is a single button that cycles through the three modes.
+  - The choice is stored under `theme-preference` and shared with the other tools on the same origin. The old `pdf-theme` key is removed.
+- **Mobile-first layout:**
+  - Before a file is opened, the workspace's empty state is the only upload area, so there are no longer two upload buttons on phones.
+  - From 1024px the tools sit in a sticky sidebar.
+  - Fixed minimum heights are gone.
+- **Page grid:**
+  - The selection toolbar is sticky and wraps.
+  - Rotate, delete and restore are always visible, sized 32px on desktop and 44px on touch (they were 16–20px).
+  - Checkboxes have larger hit areas.
+- **Merge queue:** chips are wider, with a readable position number, the file's colour and its page label.
+- **Preview:** now a native `<dialog>`, which gives a focus trap, Esc to close and an inert background. It is full-screen on phones and sized with `dvh`, and its header wraps on narrow screens.
+- **Smaller pieces:**
+  - The tool picker is a segmented control.
+  - Compress options are radio cards.
+  - Messages are floating toasts (bottom on phones, top-right on desktop).
+  - File colours are theme-aware tokens.
+
+### Fixed
+- Removed pages were never struck through: the CSS selector didn't match the markup. Removed pages now show a struck-through label, a "Removed" badge and a dashed border.
+- White text on the old gradient buttons failed contrast (about 2.9:1), and so did the amber "Unsaved changes" text on the light background (about 1.7:1). All token pairs are now checked for WCAG 2.2 AA in both themes.
+- In light mode, borders were nearly invisible and some accent colours had no light value.
+- The upload area was a `div` with `role="button"`; it is now a real `<button>`.
+- On phones the floating theme button covered content and the footer, and the preview dialog was cut off by the browser toolbar.
+- Removed unused and duplicate CSS, and the duplicate `.gstack` entry in `.gitignore`.
+
+### Removed
+- The Outfit font. Inter Variable is now the only font.
+
 ## [1.2.0] - 2026-11-12
 
 ### Fixed
@@ -22,7 +57,7 @@ All notable changes to this project will be documented in this file.
 - Edits are kept per file, so switching between files no longer discards them.
 - Keyboard support: page cards and merge queue items are focusable. Alt+arrows reorder, Enter previews, Space selects, R rotates, Delete removes. The preview dialog supports ←/→, +/−, 0 and Esc, and traps focus.
 - Drop PDFs anywhere on the workspace; new empty state with a feature overview.
-- Self-hosted Inter/Outfit fonts. These were referenced before but never loaded, and self-hosting avoids third-party requests.
+- Self-hosted Inter/Outfit fonts (Outfit was dropped in 1.3.0). These were referenced before but never loaded, and self-hosting avoids third-party requests.
 - `prefers-reduced-motion` support, skip link, screen-reader announcements for messages.
 
 ### Changed

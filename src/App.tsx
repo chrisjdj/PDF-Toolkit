@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
-import { FileText, GitMerge, Minimize2, PenTool, Scissors, Upload } from 'lucide-react';
+import { GitMerge, Loader, Minimize2, PenTool, Scissors, Upload, UploadCloud } from 'lucide-react';
 import type { PDFFile, PreviewTarget, Tool } from './types';
 import { editorReducer, isDirty, pagesForExport, visiblePages, type EditorState } from './state/editor';
 import { mergeReducer } from './state/merge';
@@ -10,21 +10,19 @@ import { openPdf } from './lib/pdfjs';
 import { buildPdf, compressPdf, type PageRef } from './lib/pdfOps';
 import { releaseFileThumbs } from './lib/thumbnails';
 import { createId, downloadBlob, formatFileSize, isPdfFile, stripPdfExt } from './lib/utils';
-import ThemeToggle from './components/ThemeToggle';
-import { Header } from './components/Header';
+import { AppHeader } from './components/AppHeader';
 import { AlertToast } from './components/AlertToast';
 import { Sidebar } from './components/Sidebar';
 import { PageGrid } from './components/PageGrid';
 import { MergeTool } from './components/MergeTool';
 import { PopupPage } from './components/PopupPage';
 import { Footer } from './components/Footer';
-import './App.scss';
 
 const pageRefs = (file: PDFFile, state: EditorState, pages: number[]): PageRef[] =>
   pages.map(pageNum => ({ fileId: file.id, file: file.file, pageNum, rotation: state.rotations.get(pageNum) ?? 0 }));
 
 function App() {
-  const { theme, toggleTheme } = useTheme();
+  const { preference: theme, setPreference: setTheme } = useTheme();
   const { alert, showAlert, dismiss } = useAlert();
 
   const [files, setFiles] = useState<PDFFile[]>([]);
@@ -45,6 +43,7 @@ function App() {
   const busy = busyMessage !== null;
 
   const openPicker = useCallback(() => fileInputRef.current?.click(), []);
+  const closePreview = useCallback(() => setPreview(null), []);
 
   // ---------------------------------------------------------------------------
   // Files
@@ -244,20 +243,20 @@ function App() {
         total={sequence.length}
         onPrev={() => index > 0 && goTo(index - 1)}
         onNext={() => index < sequence.length - 1 && goTo(index + 1)}
-        onClose={() => setPreview(null)}
+        onClose={closePreview}
       />
     );
   }
 
   const viewerDrop = useFileDrop(handleFiles);
+  const hasFiles = files.length > 0;
 
   return (
-    <div className="app-container">
-      <a href="#workspace" className="skip-link">
-        Skip to workspace
+    <>
+      <a className="skip-link" href="#main">
+        Skip to main content
       </a>
-      <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
-      <Header />
+      <AppHeader theme={theme} onThemeChange={setTheme} />
       <AlertToast alert={alert} onDismiss={dismiss} />
 
       <input
@@ -272,46 +271,28 @@ function App() {
         }}
       />
 
-      <main className="main-layout">
-        <Sidebar
-          files={files}
-          currentFile={currentFile}
-          editorState={editorState}
-          activeTool={activeTool}
-          busy={busy}
-          loadingFiles={loadingFiles}
-          mergeCount={mergeQueue.length}
-          onToolChange={setActiveTool}
-          onSelectFile={selectFile}
-          onRemoveFile={removeFile}
-          onOpenPicker={openPicker}
-          onFiles={handleFiles}
-          onSplit={splitPdf}
-          onCompress={compress}
-          onMerge={mergePdfs}
-        />
-
-        <section
-          id="workspace"
-          tabIndex={-1}
-          className={`viewer-area${viewerDrop.isDragging ? ' drag-active' : ''}`}
-          aria-label="Workspace"
-          {...viewerDrop.dropProps}
-        >
-          {activeTool === 'merge' && files.length > 0 ? (
-            <MergeTool
-              files={files}
-              queue={mergeQueue}
-              dispatch={dispatchMerge}
-              busy={busy}
-              onMerge={mergePdfs}
-              onAddFiles={openPicker}
-              onRemoveFile={removeFile}
-              onPreview={(fileId, pageNum) => setPreview({ fileId, pageNum, source: 'merge' })}
-            />
-          ) : (
-            <div className="viewer-panel">
-              {currentFile && editorState ? (
+      <main id="main" className="app-main" tabIndex={-1}>
+        <div className="container">
+          <h1 className="sr-only">PDF Toolkit — merge, split and compress PDFs in your browser</h1>
+          <div className="tool-layout">
+            <section
+              id="workspace"
+              className={`tool-layout__workspace workspace${viewerDrop.isDragging && hasFiles ? ' is-dragging' : ''}`}
+              aria-label="Workspace"
+              {...viewerDrop.dropProps}
+            >
+              {activeTool === 'merge' && hasFiles ? (
+                <MergeTool
+                  files={files}
+                  queue={mergeQueue}
+                  dispatch={dispatchMerge}
+                  busy={busy}
+                  onMerge={mergePdfs}
+                  onAddFiles={openPicker}
+                  onRemoveFile={removeFile}
+                  onPreview={(fileId, pageNum) => setPreview({ fileId, pageNum, source: 'merge' })}
+                />
+              ) : currentFile && editorState ? (
                 <PageGrid
                   file={currentFile}
                   state={editorState}
@@ -322,28 +303,53 @@ function App() {
                   onDiscard={discardChanges}
                 />
               ) : (
-                <EmptyState onOpenPicker={openPicker} loading={loadingFiles > 0} />
+                <EmptyState onOpenPicker={openPicker} loading={loadingFiles > 0} dragging={viewerDrop.isDragging} />
               )}
-            </div>
-          )}
-        </section>
+            </section>
+
+            <aside
+              className={`tool-layout__sidebar${hasFiles ? '' : ' sidebar--idle'}`}
+              aria-label="Files and tools"
+            >
+              <Sidebar
+                files={files}
+                currentFile={currentFile}
+                editorState={editorState}
+                activeTool={activeTool}
+                busy={busy}
+                loadingFiles={loadingFiles}
+                mergeCount={mergeQueue.length}
+                onToolChange={setActiveTool}
+                onSelectFile={selectFile}
+                onRemoveFile={removeFile}
+                onOpenPicker={openPicker}
+                onFiles={handleFiles}
+                onSplit={splitPdf}
+                onCompress={compress}
+                onMerge={mergePdfs}
+              />
+            </aside>
+          </div>
+        </div>
       </main>
+
+      <Footer />
 
       {previewView}
 
       {busyMessage && (
         <div className="processing-overlay" role="alert" aria-busy="true">
-          <div className="spinner" />
-          <p>{busyMessage}</p>
+          <div className="processing-overlay__panel">
+            <div className="spinner" aria-hidden="true" />
+            <p>{busyMessage}</p>
+          </div>
         </div>
       )}
-
-      <Footer />
-    </div>
+    </>
   );
 }
 
-function EmptyState({ onOpenPicker, loading }: { onOpenPicker: () => void; loading: boolean }) {
+function EmptyState({ onOpenPicker, loading, dragging }: { onOpenPicker: () => void; loading: boolean; dragging: boolean }) {
   const features = [
     { icon: Scissors, title: 'Split', text: 'Extract any pages or ranges' },
     { icon: GitMerge, title: 'Merge', text: 'Combine pages from many PDFs' },
@@ -351,25 +357,36 @@ function EmptyState({ onOpenPicker, loading }: { onOpenPicker: () => void; loadi
     { icon: PenTool, title: 'Edit pages', text: 'Reorder, rotate, remove' },
   ];
   return (
-    <div className="empty-state">
-      <div className="empty-icon">
-        <FileText aria-hidden="true" />
+    <>
+      {/* The whole area is clickable for mouse users; keyboard and screen-reader users get a real <button>. */}
+      <div
+        className={`dropzone upload-dropzone${dragging ? ' is-dragging' : ''}`}
+        onClick={e => {
+          if (loading || (e.target as HTMLElement).closest('button')) return;
+          onOpenPicker();
+        }}
+      >
+        <span className="dropzone__icon" aria-hidden="true">
+          {loading ? <Loader size={24} className="spin" /> : <UploadCloud size={24} />}
+        </span>
+        <h2 className="dropzone__title">{loading ? 'Opening…' : 'Drop PDFs here'}</h2>
+        <p className="dropzone__hint">Everything runs in your browser. Your files are never uploaded.</p>
+        <button type="button" className="btn btn--primary" onClick={onOpenPicker} disabled={loading}>
+          <Upload size={16} aria-hidden="true" /> {loading ? 'Opening…' : 'Choose PDF files'}
+        </button>
       </div>
-      <h2>Drop PDFs anywhere here</h2>
-      <p>Everything runs in your browser. Your files are never uploaded.</p>
-      <button className="primary-btn" onClick={onOpenPicker} disabled={loading}>
-        <Upload size={18} /> {loading ? 'Opening…' : 'Choose PDF files'}
-      </button>
       <ul className="feature-tiles">
         {features.map(({ icon: Icon, title, text }) => (
-          <li key={title}>
-            <Icon size={18} aria-hidden="true" />
+          <li key={title} className="card feature-tile">
+            <span className="feature-tile__icon" aria-hidden="true">
+              <Icon size={18} />
+            </span>
             <strong>{title}</strong>
             <span>{text}</span>
           </li>
         ))}
       </ul>
-    </div>
+    </>
   );
 }
 

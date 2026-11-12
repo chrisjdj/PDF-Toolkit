@@ -1,0 +1,23 @@
+// App accent — PDF-Toolkit (rose). Kept distinct from the red "danger" colour so
+// primary actions never read as destructive. All pairs verified ≥4.5:1 / ≥3:1.
+@mixin light {
+  --accent: #e11d48;
+  --accent-hover: #be123c;
+  --accent-active: #9f1239;
+  --on-accent: #ffffff;
+  --accent-subtle-bg: #fff1f2;
+  --accent-subtle-border: #fecdd3;
+  --accent-subtle-text: #be123c;
+  --focus-ring: #e11d48;
+}
+
+@mixin dark {
+  --accent: #fb7185;
+  --accent-hover: #fda4af;
+  --accent-active: #fecdd3;
+  --on-accent: #0a0a0b;
+  --accent-subtle-bg: rgb(251 113 133 / 0.12);
+  --accent-subtle-border: rgb(251 113 133 / 0.3);
+  --accent-subtle-text: #fda4af;
+  --focus-ring: #fb7185;
+}

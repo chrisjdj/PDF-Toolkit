@@ -4,6 +4,15 @@ A powerful, browser-based PDF manipulation toolkit that puts privacy first. All 
 
 **Live Demo**: [https://chrisjdj.github.io/PDF-Toolkit/](https://chrisjdj.github.io/PDF-Toolkit/)
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/dark-desktop.png" />
+  <img alt="PDF Toolkit: file list and tools sidebar beside the page grid with rotate and delete actions" src="docs/screenshots/light-desktop.png" width="1280" />
+</picture>
+
+| Light | Dark |
+|---|---|
+| <img alt="PDF Toolkit on a phone, light theme" src="docs/screenshots/light-mobile.png" width="260" /> | <img alt="PDF Toolkit on a phone, dark theme" src="docs/screenshots/dark-mobile.png" width="260" /> |
+
 ## 🚀 Features
 
 - **Split PDF**: Extract pages with ranges like `1-3, 7, 10-`.
@@ -14,8 +23,9 @@ A powerful, browser-based PDF manipulation toolkit that puts privacy first. All 
   - Initial load is ~86 KB gzipped. pdf.js, pdf-lib and qpdf load on demand.
   - Thumbnails render lazily (`IntersectionObserver`), sharp on high-DPI screens.
 - **Preview**: full-page zoom view with keyboard navigation.
-- **Accessible**: keyboard operable, screen-reader labels, reduced-motion support.
-- **Theme Support**: Premium glassmorphic design with dark and light modes.
+- **Accessible**: WCAG 2.2 AA contrast in both themes, keyboard operable, skip link, native dialogs, screen-reader labels, reduced-motion support.
+- **System / Light / Dark Theme**: follows your OS setting by default (and updates live when it changes); pick Light or Dark in the header. The choice is shared with the other tools in the suite.
+- **Responsive**: mobile-first layout from 320px phones to wide desktops, with 44px touch targets.
 - **Privacy First**: 100% client-side processing. No server, no uploads, 100% private.
 
 ## 🔍 SEO & Accessibility
@@ -33,7 +43,8 @@ A powerful, browser-based PDF manipulation toolkit that puts privacy first. All 
 - **Compression**: [qpdf](https://qpdf.sourceforge.io/) compiled to WebAssembly
 - **PDF Rendering**: [pdf.js](https://mozilla.github.io/pdf.js/)
 - **Icons**: [Lucide React](https://lucide.dev/)
-- **Styling**: Sass (SCSS)
+- **Styling**: Sass (SCSS) with the shared token-based design system (see [DESIGN.md](./DESIGN.md))
+- **Font**: Inter Variable (self-hosted via Fontsource)
 
 ## 🏗️ Getting Started
 
@@ -69,11 +80,16 @@ A powerful, browser-based PDF manipulation toolkit that puts privacy first. All 
 ```
 src/
   App.tsx            app shell: file loading, exports, preview wiring
-  components/        Sidebar, PageGrid, MergeTool, PopupPage, PageCanvas, Thumbnail, ...
+  components/        AppHeader, ThemeSwitch, Sidebar, PageGrid, MergeTool, PopupPage, PageCanvas, Thumbnail, ...
   hooks/             useReorder (mouse/touch/keyboard), useThumbnail, useFileDrop, useAlert, useTheme
+  styles/            design system (tokens, theme, base, components, shell; shared) + _accent and _app (PDF only)
   state/             editor (per-file page edits) and merge-queue reducers
   lib/               pdfOps (build/compress), pdfjs (lazy loader), thumbnails (cache/queue), utils
 ```
+
+## 🎨 Design & Theming
+
+The UI uses the design system shared by all the tools in the suite. Read [DESIGN.md](./DESIGN.md) before changing styles: use semantic tokens (no hard-coded colours), reuse the shared components, and check new UI at 320px, 768px and 1280px in both themes. The theme choice is stored in `localStorage['theme-preference']` and applied before first paint.
 
 ## 🔒 Privacy & Security
 

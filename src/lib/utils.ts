@@ -68,13 +68,13 @@ export function parsePageRanges(text: string, max: number): number[] | null {
   return [...pages];
 }
 
-/** Distinct, colour-blind-friendly-ish hues for tagging source files in the merge view. */
-export const FILE_COLORS = [
-  '#6366f1', '#f59e0b', '#10b981', '#ec4899',
-  '#0ea5e9', '#f97316', '#8b5cf6', '#14b8a6',
-  '#ef4444', '#84cc16',
-];
+/**
+ * Categorical palette for tagging source files. The actual colours are CSS custom
+ * properties (--file-1 … --file-10, see src/styles/_app.scss) with separate light/dark
+ * values, so every tag keeps ≥3:1 contrast against the surface in both themes.
+ */
+export const FILE_COLOR_COUNT = 10;
 
 export function fileColor(colorIndex: number): string {
-  return FILE_COLORS[colorIndex % FILE_COLORS.length];
+  return `var(--file-${(colorIndex % FILE_COLOR_COUNT) + 1})`;
 }
