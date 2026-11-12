@@ -21,28 +21,28 @@ export const Footer: React.FC = () => {
             <h3>Key Features</h3>
             <ul className="footer-feature-list">
               <li>
-                <div className="feature-icon"><Shield size={16} /></div>
-                <strong>100% Client-Side</strong> - No tracking, no analytics, no server storage.
+                <div className="feature-icon" aria-hidden="true"><Shield size={16} /></div>
+                <span><strong>100% Client-Side</strong> — No tracking, no analytics, no server storage.</span>
               </li>
               <li>
-                <div className="feature-icon"><GitMerge size={16} /></div>
-                <strong>Merge & Combine</strong> - Join multiple PDFs into a single document with ease.
+                <div className="feature-icon" aria-hidden="true"><GitMerge size={16} /></div>
+                <span><strong>Merge & Combine</strong> — Join multiple PDFs into a single document with ease.</span>
               </li>
               <li>
-                <div className="feature-icon"><Scissors size={16} /></div>
-                <strong>Split & Extract</strong> - Break down large PDFs or extract specific pages instantly.
+                <div className="feature-icon" aria-hidden="true"><Scissors size={16} /></div>
+                <span><strong>Split & Extract</strong> — Break down large PDFs or extract specific pages instantly.</span>
               </li>
               <li>
-                <div className="feature-icon"><Minimize2 size={16} /></div>
-                <strong>Compress PDFs</strong> - Reduce file sizes without compromising quality via local processing.
+                <div className="feature-icon" aria-hidden="true"><Minimize2 size={16} /></div>
+                <span><strong>Compress PDFs</strong> — Reduce file sizes without compromising quality via local processing.</span>
               </li>
               <li>
-                <div className="feature-icon"><Zap size={16} /></div>
-                <strong>Fast & Secure</strong> - Powered by WebAssembly for near-native performance right in your tab.
+                <div className="feature-icon" aria-hidden="true"><Zap size={16} /></div>
+                <span><strong>Fast & Secure</strong> — Powered by WebAssembly for near-native performance right in your tab.</span>
               </li>
               <li>
-                <div className="feature-icon"><FileText size={16} /></div>
-                <strong>Page Management</strong> - Rotate, reorder, or delete pages with a simple drag-and-drop interface.
+                <div className="feature-icon" aria-hidden="true"><FileText size={16} /></div>
+                <span><strong>Page Management</strong> — Rotate, reorder, or delete pages with a simple drag-and-drop interface.</span>
               </li>
             </ul>
           </div>

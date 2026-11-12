@@ -1,40 +1,14 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import javascriptObfuscator from 'vite-plugin-javascript-obfuscator'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
+// pdf.js, pdf-lib and qpdf (WASM) are all loaded on demand via dynamic import(),
+// so the initial bundle only contains React and the UI.
 export default defineConfig({
   base: '/web-tools/PDF-Toolkit/',
-  plugins: [
-    react(),
-    javascriptObfuscator({
-      options: {
-        compact: true,
-        controlFlowFlattening: true,
-        controlFlowFlatteningThreshold: 0.5,
-        deadCodeInjection: false,
-        identifierNamesGenerator: 'hexadecimal',
-        log: false,
-        numbersToExpressions: true,
-        renameGlobals: false,
-        selfDefending: false,
-        simplify: true,
-        splitStrings: false,
-        stringArray: false,
-        stringArrayCallsTransform: false,
-        transformObjectKeys: false
-      }
-    })
-  ],
+  plugins: [react()],
   build: {
-    target: 'esnext',
+    target: 'es2022',
+    // The qpdf chunk embeds its WASM binary and is only fetched when compressing.
     chunkSizeWarningLimit: 1800,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'pdf-lib': ['@cantoo/pdf-lib'],
-          'icons': ['lucide-react']
-        }
-      }
-    }
-  }
-})
+  },
+});

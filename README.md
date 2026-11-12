@@ -6,17 +6,15 @@ A powerful, browser-based PDF manipulation toolkit that puts privacy first. All 
 
 ## 🚀 Features
 
-- **Split PDF**: Extract specific page ranges into new documents.
+- **Split PDF**: Extract pages with ranges like `1-3, 7, 10-`.
 - **Merge PDF**: Combine pages from multiple PDF files, reorder them, and rotate as needed.
-- **Compress PDF**: Optimize and reduce PDF file size for easier sharing.
-- **Page Management**: 
-  - **Rotate**: Change page orientation (90° increments) with optimized performance.
-  - **Reorder**: Drag and drop pages to change their sequence.
-  - **Delete**: Remove unwanted pages from your document.
-- **Performance Optimized**: 
-  - **Lazy Loading**: Thumbnails are loaded only when visible using `IntersectionObserver`.
-  - **Efficient Rendering**: Minimized re-renders for smoother page interactions.
-- **Preview**: High-quality page thumbnails and full-page zoom view.
+- **Compress PDF**: Lossless (qpdf, WebAssembly) or Strong, which also downsizes large photos and scans.
+- **Page Management**: rotate, reorder (drag, long-press on touch, or Alt+arrow keys) and remove pages. Edits are kept per file.
+- **Performance**:
+  - Initial load is ~86 KB gzipped. pdf.js, pdf-lib and qpdf load on demand.
+  - Thumbnails render lazily (`IntersectionObserver`), sharp on high-DPI screens.
+- **Preview**: full-page zoom view with keyboard navigation.
+- **Accessible**: keyboard operable, screen-reader labels, reduced-motion support.
 - **Theme Support**: Premium glassmorphic design with dark and light modes.
 - **Privacy First**: 100% client-side processing. No server, no uploads, 100% private.
 
@@ -31,7 +29,8 @@ A powerful, browser-based PDF manipulation toolkit that puts privacy first. All 
 - **Framework**: [React 19](https://react.dev/)
 - **Build Tool**: [Vite](https://vitejs.dev/)
 - **Language**: [TypeScript](https://www.typescriptlang.org/)
-- **PDF Manipulation**: [pdf-lib](https://pdf-lib.js.org/)
+- **PDF Manipulation**: [@cantoo/pdf-lib](https://github.com/cantoo-scribe/pdf-lib) (pdf-lib fork with decryption support)
+- **Compression**: [qpdf](https://qpdf.sourceforge.io/) compiled to WebAssembly
 - **PDF Rendering**: [pdf.js](https://mozilla.github.io/pdf.js/)
 - **Icons**: [Lucide React](https://lucide.dev/)
 - **Styling**: Sass (SCSS)
@@ -59,6 +58,22 @@ A powerful, browser-based PDF manipulation toolkit that puts privacy first. All 
    ```bash
    npm run build
    ```
+
+4. Lint:
+   ```bash
+   npm run lint
+   ```
+
+### Project structure
+
+```
+src/
+  App.tsx            app shell: file loading, exports, preview wiring
+  components/        Sidebar, PageGrid, MergeTool, PopupPage, PageCanvas, Thumbnail, ...
+  hooks/             useReorder (mouse/touch/keyboard), useThumbnail, useFileDrop, useAlert, useTheme
+  state/             editor (per-file page edits) and merge-queue reducers
+  lib/               pdfOps (build/compress), pdfjs (lazy loader), thumbnails (cache/queue), utils
+```
 
 ## 🔒 Privacy & Security
 

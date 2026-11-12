@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-package-lock.json
 yarn.lock
 pnpm-lock.yaml
 
@@ -40,3 +39,7 @@ pnpm-debug.log*
 .Spotlight-V100
 .Trashes
 ehthumbs.db
+.gstack/
+
+# Local tooling state
+.gstack/
